@@ -15,6 +15,17 @@ CA_PROVINCES = ['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'
 
 ALL_REGIONS = US_STATES + CA_PROVINCES
 
+EVENT_ORDER = [
+    "Forms",
+    "Weapons",
+    "Combat Weapons",
+    "Sparring",
+    "Creative Forms",
+    "Creative Weapons",
+    "X-Treme Forms",
+    "X-Treme Weapons"
+]
+
 @st.cache_data(ttl=600)
 def scrape_state_data(state_code, country="US"):
     url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={DIVISION_CODE}"
@@ -28,11 +39,12 @@ def scrape_state_data(state_code, country="US"):
 
     soup = BeautifulSoup(resp.text, 'html.parser')
 
+    # Find the main table with 'Name' and 'Pts' headers
     tables = soup.find_all('table')
     table = None
     for t in tables:
         headers = [th.get_text(strip=True) for th in t.find_all('th')]
-        if 'Name' in headers and 'Pts' in headers:
+        if 'Name' in headers and 'Pts' in headers and 'Event' in headers:
             table = t
             break
     if table is None:
@@ -44,11 +56,11 @@ def scrape_state_data(state_code, country="US"):
 
     for row in table.find_all('tr')[1:]:
         cols = row.find_all('td')
-        if not cols or len(cols) < 4:
+        if not cols or len(cols) < len(headers):
             continue
-        name = cols[col_idx.get('Name', 0)].get_text(strip=True)
-        event = cols[col_idx.get('Event', 2)].get_text(strip=True)
-        points_str = cols[col_idx.get('Pts', 3)].get_text(strip=True)
+        name = cols[col_idx.get('Name')].get_text(strip=True)
+        event = cols[col_idx.get('Event')].get_text(strip=True)
+        points_str = cols[col_idx.get('Pts')].get_text(strip=True)
         points = int(points_str) if points_str.isdigit() else 0
 
         if points > 0:
@@ -64,9 +76,11 @@ def scrape_state_data(state_code, country="US"):
     if df.empty:
         return df
 
+    # Rank within each event by points descending
     df['Rank'] = df.groupby('Event')['Points'] \
                    .rank(method='first', ascending=False).astype(int)
 
+    # Reorder columns
     df = df[['Rank', 'Name', 'Points', 'State/Province', 'Country', 'Event']]
 
     return df
@@ -88,11 +102,13 @@ def main():
     if name_filter:
         df = df[df['Name'].str.lower().str.contains(name_filter)]
 
-    events = sorted(df['Event'].unique())
+    # Only show events in fixed order and present in data
+    events_in_data = df['Event'].unique()
+    events_ordered = [e for e in EVENT_ORDER if e in events_in_data]
 
     st.write(f"Displaying {len(df)} competitors with points for {region} — separated by event")
 
-    for event in events:
+    for event in events_ordered:
         st.subheader(event)
         event_df = df[df['Event'] == event].sort_values(by="Rank")
         st.dataframe(event_df, use_container_width=True)
