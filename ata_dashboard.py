@@ -85,4 +85,19 @@ def main():
         divisions = sorted(df['Division'].unique()) if 'Division' in df.columns else []
         events = sorted(df['Event'].unique()) if 'Event' in df.columns else []
 
-        state_filter = st.multiselect("Filter by_
+        state_filter = st.multiselect("Filter by State/Province", states, default=states)
+        event_filter = st.multiselect("Filter by Event (Optional)", events) if 'Event' in df.columns else []
+        search = st.text_input("Search by Name or Division").strip().lower()
+
+        filtered_df = df[df['State/Province'].isin(state_filter)]
+
+        if event_filter and 'Event' in df.columns:
+            filtered_df = filtered_df[filtered_df['Event'].isin(event_filter)]
+
+        if search:
+            filtered_df = filtered_df[filtered_df.apply(lambda row: search in row.astype(str).str.lower().to_string(), axis=1)]
+
+        st.dataframe(filtered_df, use_container_width=True)
+
+if __name__ == "__main__":
+    main()
