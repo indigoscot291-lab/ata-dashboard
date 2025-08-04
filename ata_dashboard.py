@@ -47,18 +47,29 @@ def scrape_state_data(state_code, country="US"):
         if not cols or len(cols) < 4:
             continue
         name = cols[col_idx.get('Name', 0)].get_text(strip=True)
-        rank = cols[col_idx.get('Rank', 1)].get_text(strip=True)
         event = cols[col_idx.get('Event', 2)].get_text(strip=True)
-        points = cols[col_idx.get('Pts', 3)].get_text(strip=True)
-        data.append({
-            "Name": name,
-            "Rank": rank,
-            "Event": event,
-            "Points": int(points) if points.isdigit() else 0,
-            "State/Province": state_code,
-            "Country": country
-        })
-    return pd.DataFrame(data)
+        points_str = cols[col_idx.get('Pts', 3)].get_text(strip=True)
+        points = int(points_str) if points_str.isdigit() else 0
+
+        if points > 0:
+            data.append({
+                "Name": name,
+                "Event": event,
+                "Points": points,
+                "State/Province": state_code,
+                "Country": country
+            })
+
+    df = pd.DataFrame(data)
+    if df.empty:
+        return df
+
+    df['Rank'] = df.groupby('Event')['Points'] \
+                   .rank(method='first', ascending=False).astype(int)
+
+    df = df[['Rank', 'Name', 'Points', 'State/Province', 'Country', 'Event']]
+
+    return df
 
 
 def main():
@@ -67,26 +78,24 @@ def main():
     region = st.selectbox("Select State or Province", options=ALL_REGIONS)
     country = "CA" if region in CA_PROVINCES else "US"
 
-    if st.button("Fetch Results"):
-        with st.spinner(f"Fetching results for {region}..."):
-            df = scrape_state_data(region, country)
+    df = scrape_state_data(region, country)
 
-        if df.empty:
-            st.warning("No data found for this region.")
-            return
+    if df.empty:
+        st.warning("No data found for this region.")
+        return
 
-        events = sorted(df['Event'].unique())
-        selected_event = st.selectbox("Select Event", options=["All Events"] + events)
+    name_filter = st.text_input("Filter by Competitor Name (optional)").strip().lower()
+    if name_filter:
+        df = df[df['Name'].str.lower().str.contains(name_filter)]
 
-        if selected_event != "All Events":
-            df = df[df['Event'] == selected_event]
+    events = sorted(df['Event'].unique())
 
-        name_filter = st.text_input("Filter by Competitor Name (optional)").strip().lower()
-        if name_filter:
-            df = df[df['Name'].str.lower().str.contains(name_filter)]
+    st.write(f"Displaying {len(df)} competitors with points for {region} — separated by event")
 
-        st.write(f"Displaying {len(df)} results for {region} - {selected_event}")
-        st.dataframe(df.sort_values(by="Points", ascending=False), use_container_width=True)
+    for event in events:
+        st.subheader(event)
+        event_df = df[df['Event'] == event].sort_values(by="Rank")
+        st.dataframe(event_df, use_container_width=True)
 
 
 if __name__ == "__main__":
