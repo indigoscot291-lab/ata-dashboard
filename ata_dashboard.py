@@ -34,53 +34,62 @@ def scrape_state_data(state_code, country="US"):
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
-    except requests.RequestException:
+    except requests.RequestException as e:
+        st.error(f"Request error: {e}")
         return pd.DataFrame()
 
     soup = BeautifulSoup(resp.text, 'html.parser')
 
-    # Find the main table with 'Name' and 'Pts' headers
-    tables = soup.find_all('table')
-    table = None
-    for t in tables:
-        headers = [th.get_text(strip=True) for th in t.find_all('th')]
-        if 'Name' in headers and 'Pts' in headers and 'Event' in headers:
-            table = t
-            break
-    if table is None:
-        return pd.DataFrame()
-
     data = []
-    headers = [th.get_text(strip=True) for th in table.find_all('th')]
-    col_idx = {col: i for i, col in enumerate(headers)}
 
-    for row in table.find_all('tr')[1:]:
-        cols = row.find_all('td')
-        if not cols or len(cols) < len(headers):
+    # Find all event headers (h2 or h3) that match our event names
+    event_headers = soup.find_all(['h2', 'h3'])
+
+    for header in event_headers:
+        event_name = header.get_text(strip=True)
+        if event_name not in EVENT_ORDER:
             continue
-        name = cols[col_idx.get('Name')].get_text(strip=True)
-        event = cols[col_idx.get('Event')].get_text(strip=True)
-        points_str = cols[col_idx.get('Pts')].get_text(strip=True)
-        points = int(points_str) if points_str.isdigit() else 0
 
-        if points > 0:
-            data.append({
-                "Name": name,
-                "Event": event,
-                "Points": points,
-                "State/Province": state_code,
-                "Country": country
-            })
+        # Find the next table sibling (skip non-table elements)
+        next_sibling = header.next_sibling
+        while next_sibling and next_sibling.name != 'table':
+            next_sibling = next_sibling.next_sibling
+
+        table = next_sibling
+        if table is None:
+            continue
+
+        headers = [th.get_text(strip=True) for th in table.find_all('th')]
+        col_idx = {col: i for i, col in enumerate(headers)}
+
+        if 'Name' not in col_idx or 'Pts' not in col_idx:
+            continue
+
+        for row in table.find_all('tr')[1:]:
+            cols = row.find_all('td')
+            if len(cols) < len(headers):
+                continue
+
+            name = cols[col_idx['Name']].get_text(strip=True)
+            points_str = cols[col_idx['Pts']].get_text(strip=True)
+            points = int(points_str) if points_str.isdigit() else 0
+
+            if points > 0:
+                data.append({
+                    "Name": name,
+                    "Event": event_name,
+                    "Points": points,
+                    "State/Province": state_code,
+                    "Country": country
+                })
 
     df = pd.DataFrame(data)
     if df.empty:
         return df
 
-    # Rank within each event by points descending
     df['Rank'] = df.groupby('Event')['Points'] \
                    .rank(method='first', ascending=False).astype(int)
 
-    # Reorder columns
     df = df[['Rank', 'Name', 'Points', 'State/Province', 'Country', 'Event']]
 
     return df
@@ -102,7 +111,6 @@ def main():
     if name_filter:
         df = df[df['Name'].str.lower().str.contains(name_filter)]
 
-    # Only show events in fixed order and present in data
     events_in_data = df['Event'].unique()
     events_ordered = [e for e in EVENT_ORDER if e in events_in_data]
 
