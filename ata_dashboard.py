@@ -52,6 +52,11 @@ def scrape_state_data(state_code, division_code=DIVISION_CODE, country="US") -> 
     rows_data = []
 
     for li in soup.find_all("li"):
+        for li in soup.find_all("li"):
+    li_text = li.get_text(strip=True)
+    st.write(f"DEBUG li text: '{li_text}'")
+    event_name = get_event_name_from_text(li_text)
+    st.write(f" -> matched event: {event_name}")  # shows if keyword detection succeeded
         event_name = get_event_name_from_text(li.get_text(strip=True))
         if not event_name:
             continue
@@ -169,3 +174,4 @@ if search:
                     event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
                     st.subheader(f"{event}")
                     st.dataframe(event_df[["Rank", "Name", "Points", "State/Province", "Country"]], use_container_width=True)
+
