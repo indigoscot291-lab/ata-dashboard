@@ -102,11 +102,15 @@ if st.button("Fetch Standings"):
         if df.empty:
             st.info("No competitors with points found.")
         else:
-            st.subheader("All Competitors Combined (Sorted by Points)")
-            df_sorted = df.sort_values(by="Points", ascending=False).reset_index(drop=True)
-            df_sorted["Rank"] = df_sorted["Points"].rank(method="min", ascending=False).astype(int)
-            display_cols = ["Rank", "Country", "Region", "Place", "Name", "Points", "Location"]
-            st.dataframe(df_sorted[display_cols])
+            st.subheader("All Competitors Combined by Event")
+
+            # Show per-event tables, sorted by points, include Country and Region columns
+            for event in sorted(df["Event"].unique()):
+                st.markdown(f"### {event}")
+                event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
+                event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
+                display_cols = ["Rank", "Country", "Region", "Place", "Name", "Points", "Location"]
+                st.dataframe(event_df[display_cols])
 
     else:
         country_code, state_code = selected_region.split("-")
@@ -120,8 +124,9 @@ if st.button("Fetch Standings"):
             st.info("No competitors with points found.")
         else:
             st.subheader("Competitor Standings")
-            events = df["Event"].unique()
-            for event in sorted(events):
+
+            # Show events grouped, only for single region (no Country/Region columns)
+            for event in sorted(df["Event"].unique()):
                 st.markdown(f"### {event}")
                 event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
                 event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
