@@ -125,81 +125,142 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
 
     df = pd.DataFrame(rows_data)
 
-    # === DEDUP STEP ===
-    # Remove duplicate rows for the same competitor in the same event
+    # Deduplication within a single scrape (rare)
     df = df.drop_duplicates(subset=["Event", "Name"], keep="first").reset_index(drop=True)
 
-    # Add Rank per Event (1-based), ordered by descending Points
-    df["Rank"] = df.groupby("Event")["Points"].rank(method="first", ascending=False).astype(int)
+    # Rank per event within scrape (will be recalculated after combining)
+    df["Rank"] = df.groupby("Event")["Points"].rank(method="min", ascending=False).astype(int)
 
     # Reorder columns with Rank first
     df = df[["Rank", "Name", "Points", "State/Province", "Country", "Event"]]
 
     return df
 
-# -----------------------
-# Helper for country detection
-# -----------------------
 def get_country_for_region(region: str) -> str:
     ca_list = {"AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK"}
     return "CA" if region in ca_list else "US"
 
-# -----------------------
-# Streamlit UI
-# -----------------------
 st.set_page_config(page_title="ATA W01D Standings", layout="wide")
 st.title("ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
 
-# Add "All" option
 region_options = ["All"] + REGIONS
 selected_region = st.selectbox("Select State or Province", region_options)
 
-# Fetch data: single region on demand, or all regions if "All" selected
 if selected_region == "All":
     all_dfs = []
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    total_regions = len(REGIONS)
+
     with st.spinner("Loading standings for all regions... this may take a bit..."):
-        for region in REGIONS:
+        for i, region in enumerate(REGIONS, start=1):
             country = get_country_for_region(region)
             df_state = scrape_state_data(region, division_code=DIVISION_CODE, country=country)
             if not df_state.empty:
                 all_dfs.append(df_state)
+
+            progress_bar.progress(i / total_regions)
+            status_text.text(f"Fetched {i} of {total_regions} regions...")
+
+    progress_bar.empty()
+    status_text.empty()
+
     if all_dfs:
         df = pd.concat(all_dfs, ignore_index=True)
     else:
         df = pd.DataFrame()
+
+    if df.empty:
+        st.info("No results found for any region.")
+    else:
+        # Remove duplicates globally by Event + Name, keep highest points
+        df = df.sort_values(["Event", "Name", "Points"], ascending=[True, True, False])
+        df = df.drop_duplicates(subset=["Event", "Name"], keep="first").reset_index(drop=True)
+
+        # Calculate total points per competitor (across all events)
+        total_points = df.groupby("Name")["Points"].sum().reset_index()
+        total_points = total_points.rename(columns={"Points": "Total Points"})
+
+        # Merge total points back into df
+        df = df.merge(total_points, on="Name", how="left")
+
+        # Recalculate Rank per event by descending points
+        df["Rank"] = df.groupby("Event")["Points"].rank(method="min", ascending=False).astype(int)
+
+        # Filters
+        event_options = ["All"] + sorted(df["Event"].unique())
+        selected_event = st.selectbox("Select Event (or All)", event_options)
+
+        name_query = st.text_input("Filter by Competitor Name (optional)").strip().lower()
+
+        display_df = df.copy()
+        if selected_event != "All":
+            display_df = display_df[display_df["Event"] == selected_event]
+
+        if name_query:
+            display_df = display_df[display_df["Name"].str.lower().str.contains(name_query)]
+
+        if display_df.empty:
+            st.info("No competitors match the selected filters.")
+        else:
+            st.write(f"Showing {len(display_df)} competitor rows from all regions")
+
+            events_present = [e for e in EVENT_ORDER if e in display_df["Event"].unique()]
+            if not events_present:
+                events_present = sorted(display_df["Event"].unique())
+
+            for event in events_present:
+                st.subheader(event)
+                ev_df = display_df[display_df["Event"] == event].copy()
+
+                # Sort by descending points, then ascending name
+                ev_df = ev_df.sort_values(["Points", "Name"], ascending=[False, True]).reset_index(drop=True)
+
+                # Recalculate Rank to match sorting
+                ev_df["Rank"] = ev_df["Points"].rank(method="min", ascending=False).astype(int)
+
+                display_cols = ["Rank", "Name", "Points", "Total Points", "State/Province", "Country"]
+
+                st.dataframe(ev_df[display_cols], use_container_width=True)
+
 else:
     country = get_country_for_region(selected_region)
     with st.spinner(f"Loading standings for {selected_region}..."):
         df = scrape_state_data(selected_region, division_code=DIVISION_CODE, country=country)
 
-if df.empty:
-    st.info("No results found for this selection (or no competitors with points).")
-else:
-    # Event dropdown (All or single event)
-    event_options = ["All"] + sorted(df["Event"].unique())
-    selected_event = st.selectbox("Select Event (or All)", event_options)
-
-    # Name filter
-    name_query = st.text_input("Filter by Competitor Name (optional)").strip().lower()
-
-    display_df = df.copy()
-    if selected_event != "All":
-        display_df = display_df[display_df["Event"] == selected_event]
-
-    if name_query:
-        display_df = display_df[display_df["Name"].str.lower().str.contains(name_query)]
-
-    if display_df.empty:
-        st.info("No competitors match the selected filters.")
+    if df.empty:
+        st.info("No results found for this selection (or no competitors with points).")
     else:
-        # Show events in fixed order if present; otherwise fallback to whatever exists
-        events_present = [e for e in EVENT_ORDER if e in display_df["Event"].unique()]
-        if not events_present:
-            events_present = sorted(display_df["Event"].unique())
+        event_options = ["All"] + sorted(df["Event"].unique())
+        selected_event = st.selectbox("Select Event (or All)", event_options)
 
-        st.write(f"Showing {len(display_df)} competitor rows for {selected_region}")
+        name_query = st.text_input("Filter by Competitor Name (optional)").strip().lower()
 
-        for event in events_present:
-            st.subheader(event)
-            ev_df = display_df[display_df["Event"] == event].sort_values(["Rank", "Name"]).reset_index(drop=True)
-            st.dataframe(ev_df, use_container_width=True)
+        display_df = df.copy()
+        if selected_event != "All":
+            display_df = display_df[display_df["Event"] == selected_event]
+
+        if name_query:
+            display_df = display_df[display_df["Name"].str.lower().str.contains(name_query)]
+
+        if display_df.empty:
+            st.info("No competitors match the selected filters.")
+        else:
+            events_present = [e for e in EVENT_ORDER if e in display_df["Event"].unique()]
+            if not events_present:
+                events_present = sorted(display_df["Event"].unique())
+
+            st.write(f"Showing {len(display_df)} competitor rows for {selected_region}")
+
+            for event in events_present:
+                st.subheader(event)
+                ev_df = display_df[display_df["Event"] == event].copy()
+
+                # Sort by descending points, then ascending name
+                ev_df = ev_df.sort_values(["Points", "Name"], ascending=[False, True]).reset_index(drop=True)
+
+                ev_df["Rank"] = ev_df["Points"].rank(method="min", ascending=False).astype(int)
+
+                display_cols = ["Rank", "Name", "Points", "State/Province", "Country"]
+
+                st.dataframe(ev_df[display_cols], use_container_width=True)
