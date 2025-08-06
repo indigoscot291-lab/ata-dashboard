@@ -1,179 +1,182 @@
-# app.py
-"""
-ATA Tournament Standings Scraper & Dashboard
-
-Usage:
-    pip install -r requirements.txt
-    streamlit run app.py
-
-Default: Fetches ATA Worlds standings and dedupes competitors.
-"""
-
-import re
-from typing import List, Optional
-
+import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import streamlit as st
-from datetime import datetime
 
-# ---------------------------
-# Configuration
-# ---------------------------
-DEFAULT_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings"
-REQUEST_TIMEOUT = 15  # seconds
+# Event keyword mapping (used to identify which <li> corresponds to which event)
+EVENT_KEYWORDS = {
+    "Forms": "Forms",
+    "Weapons": "Weapons",
+    "Combat": "Combat Weapons",
+    "Sparring": "Sparring",
+    "Creative Forms": "Creative Forms",
+    "Creative Weapons": "Creative Weapons",
+    "X-Treme Forms": "X-Treme Forms",
+    "X-Treme Weapons": "X-Treme Weapons",
+}
 
-# ---------------------------
-# Scraper functions
-# ---------------------------
+# US states + Canadian provinces
+REGIONS = [
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+    "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK"
+]
 
-def fetch_html(url: str) -> str:
-    """Fetch HTML from a URL."""
-    resp = requests.get(url, timeout=REQUEST_TIMEOUT)
-    resp.raise_for_status()
-    return resp.text
+DIVISION_CODE = "W01D"  # Women 1st Degree, 50-59
 
-def _clean_event_name(text: str) -> str:
-    """Normalize event name."""
-    if not text:
-        return "Unknown Event"
-    return re.sub(r'\s+', ' ', text).strip()
-
-def parse_events_from_html(html: str) -> List[pd.DataFrame]:
-    """Extract events and tables from ATA standings page HTML."""
-    soup = BeautifulSoup(html, "html.parser")
-    events: List[pd.DataFrame] = []
-
-    # Primary: <li> header + next <table>
-    for li in soup.find_all("li"):
-        event_name = _clean_event_name(li.get_text(separator=" ", strip=True))
-        table = li.find_next("table")
-        if table:
-            try:
-                df = pd.read_html(str(table))[0]
-            except ValueError:
-                continue
-            df["Event"] = event_name
-            events.append(df)
-
-    # Fallback: all tables + nearest heading
-    if not events:
-        for table in soup.find_all("table"):
-            try:
-                df = pd.read_html(str(table))[0]
-            except ValueError:
-                continue
-            heading_tag = table.find_previous(["h1", "h2", "h3", "h4", "p", "div"])
-            event_name = _clean_event_name(heading_tag.get_text(" ", strip=True)) if heading_tag else "Unknown Event"
-            df["Event"] = event_name
-            events.append(df)
-
-    return events
-
-def _detect_score_column(df: pd.DataFrame) -> Optional[str]:
-    """Detect numeric score column heuristically."""
-    if df is None or df.empty:
-        return None
-    # Check column names
-    name_candidates = [c for c in df.columns if re.search(r'score|points|total|avg|judge', str(c), flags=re.I)]
-    if name_candidates:
-        return name_candidates[0]
-    # Check numeric content
-    for col in df.columns:
-        coerced = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d\.\-]', '', regex=True), errors='coerce')
-        if coerced.notna().mean() >= 0.5:
-            return col
+def get_event_name_from_text(text: str):
+    """Return canonical event name if any keyword matches header text (case-insensitive)."""
+    for keyword, event in EVENT_KEYWORDS.items():
+        if keyword.lower() in text.lower():
+            return event
     return None
 
-def dedupe_event_df(df: pd.DataFrame, method: str = "first", competitor_col_hint: Optional[str] = None) -> pd.DataFrame:
-    """Dedupe competitors within one event."""
-    if method == "all":
-        return df.copy()
-    # Find competitor column
-    if competitor_col_hint and competitor_col_hint in df.columns:
-        comp_col = competitor_col_hint
-    else:
-        comp_cols = [c for c in df.columns if re.search(r'competitor|name|athlete', str(c), flags=re.I)]
-        if comp_cols:
-            comp_col = comp_cols[0]
-        else:
-            comp_col = df.columns[0]
-    df[comp_col] = df[comp_col].astype(str).str.strip()
-
-    if method == "first":
-        return df.drop_duplicates(subset=[comp_col], keep="first").reset_index(drop=True)
-
-    # method == "best"
-    score_col = _detect_score_column(df)
-    if not score_col:
-        return df.drop_duplicates(subset=[comp_col], keep="first").reset_index(drop=True)
-    numeric_score = pd.to_numeric(df[score_col].astype(str).str.replace(r'[^\d\.\-]', '', regex=True), errors='coerce')
-    df["_numeric_score_tmp"] = numeric_score
-    idx = df.sort_values("_numeric_score_tmp", ascending=False).groupby(comp_col, sort=False).head(1).index
-    return df.loc[idx].drop(columns=["_numeric_score_tmp"]).reset_index(drop=True)
-
-def combine_events(events: List[pd.DataFrame], dedupe_method: str = "first", competitor_col_hint: Optional[str] = None) -> pd.DataFrame:
-    """Combine all events after deduping each."""
-    processed = [dedupe_event_df(ev, method=dedupe_method, competitor_col_hint=competitor_col_hint) for ev in events]
-    combined = pd.concat(processed, ignore_index=True, sort=False)
-    if "Event" in combined.columns:
-        cols = ["Event"] + [c for c in combined.columns if c != "Event"]
-        combined = combined[cols]
-    return combined
-
-def fetch_and_process(url: str, dedupe_method: str = "first", competitor_col_hint: Optional[str] = None) -> pd.DataFrame:
-    """Pipeline: fetch HTML, parse events, combine."""
-    html = fetch_html(url)
-    events = parse_events_from_html(html)
-    return combine_events(events, dedupe_method, competitor_col_hint)
-
-# ---------------------------
-# Streamlit UI
-# ---------------------------
-st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
-st.title("ATA Tournament Standings")
-
-st.sidebar.header("Settings")
-url = st.sidebar.text_input("Standings URL", value=DEFAULT_URL)
-dedupe = st.sidebar.selectbox("Dedupe method", ["first", "best", "all"])
-competitor_hint = st.sidebar.text_input("Competitor column name (optional)", value="")
-ttl = st.sidebar.number_input("Cache TTL (seconds)", value=300, min_value=30, step=30)
-fetch_now = st.sidebar.button("Fetch / Refresh")
-
-@st.cache_data(ttl=ttl)
-def load_data(url, dedupe, competitor_hint):
-    return fetch_and_process(url, dedupe, competitor_hint if competitor_hint else None)
-
-if ("data" not in st.session_state) or fetch_now:
+@st.cache_data(ttl=600, show_spinner=False)
+def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, country: str = "US") -> pd.DataFrame:
+    """
+    Scrape the state standings page for the given division code.
+    Looks for <li> elements that contain event keywords and grabs the next <table>.
+    Returns rows with Name, Event, Points, State/Province, Country, and Rank.
+    """
+    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={division_code}"
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        with st.spinner("Fetching data..."):
-            st.session_state["data"] = load_data(url, dedupe, competitor_hint)
-            st.success(f"Fetched at {datetime.now().strftime('%H:%M:%S')}")
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
     except Exception as e:
-        st.error(f"Error: {e}")
+        # Return empty DataFrame on any request problem
+        st.warning(f"Error fetching data for {state_code}: {e}")
+        return pd.DataFrame()
 
-if "data" in st.session_state:
-    df = st.session_state["data"]
-    if df.empty:
-        st.warning("No data found.")
+    soup = BeautifulSoup(resp.text, "html.parser")
+    rows_data = []
+
+    # Find all list items and attempt to identify event names, then parse the following table
+    for li in soup.find_all("li"):
+        li_text = li.get_text(strip=True)
+        event_name = get_event_name_from_text(li_text)
+        if not event_name:
+            continue
+
+        # Get the next table after this li
+        table = li.find_next("table")
+        if not table:
+            continue
+
+        # Read column headers from the table
+        th_texts = [th.get_text(strip=True) for th in table.find_all("th")]
+        col_idx = {name: idx for idx, name in enumerate(th_texts)}
+
+        # Must contain Name and Pts (Pts or Points may vary)
+        pts_key = None
+        for candidate in ("Pts", "Points", "PTS"):
+            if candidate in col_idx:
+                pts_key = candidate
+                break
+        if "Name" not in col_idx or pts_key is None:
+            # If required columns not present, skip this table
+            continue
+
+        # Parse rows
+        tr_rows = table.find_all("tr")[1:]  # skip header row
+        for tr in tr_rows:
+            tds = tr.find_all("td")
+            # ensure enough columns
+            if len(tds) <= max(col_idx["Name"], col_idx[pts_key]):
+                continue
+
+            name = tds[col_idx["Name"]].get_text(strip=True)
+            pts_text = tds[col_idx[pts_key]].get_text(strip=True).replace(",", "").strip()
+
+            # Try parse points (allow integers or floats). If not parseable, skip.
+            try:
+                # Points may be integer or float; treat as float for safety
+                points = float(pts_text)
+            except Exception:
+                continue
+
+            # Include only competitors who have > 0 points
+            if points > 0:
+                rows_data.append({
+                    "Name": name,
+                    "Event": event_name,
+                    "Points": points,
+                    "State/Province": state_code,
+                    "Country": country
+                })
+
+    if not rows_data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows_data)
+
+    # === DEDUP STEP ===
+    # Remove duplicate rows for the same competitor in the same event
+    df = df.drop_duplicates(subset=["Event", "Name"], keep="first").reset_index(drop=True)
+
+    # Add Rank per Event (1-based), ordered by descending Points
+    df["Rank"] = df.groupby("Event")["Points"].rank(method="first", ascending=False).astype(int)
+
+    # Reorder columns with Rank first
+    df = df[["Rank", "Name", "Points", "State/Province", "Country", "Event"]]
+
+    return df
+
+# -----------------------
+# Streamlit UI
+# -----------------------
+st.set_page_config(page_title="ATA W01D Standings", layout="wide")
+st.title("ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
+
+selected_region = st.selectbox("Select State or Province", REGIONS)
+country = "CA" if selected_region in ["AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK"] else "US"
+
+# Fetch only when a region is selected (on page load, a region is already selected)
+with st.spinner(f"Loading standings for {selected_region}..."):
+    df = scrape_state_data(selected_region, division_code=DIVISION_CODE, country=country)
+
+if df.empty:
+    st.info("No results found for this region (or no competitors with points).")
+else:
+    # Event dropdown (All or single event)
+    event_options = ["All"] + sorted(df["Event"].unique())
+    selected_event = st.selectbox("Select Event (or All)", event_options)
+
+    # Name filter
+    name_query = st.text_input("Filter by Competitor Name (optional)").strip().lower()
+
+    display_df = df.copy()
+    if selected_event != "All":
+        display_df = display_df[display_df["Event"] == selected_event]
+
+    if name_query:
+        display_df = display_df[display_df["Name"].str.lower().str.contains(name_query)]
+
+    if display_df.empty:
+        st.info("No competitors match the selected filters.")
     else:
-        st.write(f"**Rows:** {len(df)} | **Columns:** {len(df.columns)}")
-        events = ["All Events"] + sorted(df["Event"].dropna().unique().tolist())
-        chosen_event = st.selectbox("Filter by Event", events)
-        shown = df if chosen_event == "All Events" else df[df["Event"] == chosen_event]
-        st.dataframe(shown, use_container_width=True)
+        # Display each event in fixed order if present; otherwise show events found
+        EVENT_ORDER = [
+            "Forms",
+            "Weapons",
+            "Combat Weapons",
+            "Sparring",
+            "Creative Forms",
+            "Creative Weapons",
+            "X-Treme Forms",
+            "X-Treme Weapons",
+        ]
+        events_present = [e for e in EVENT_ORDER if e in display_df["Event"].unique()]
+        # if none from EVENT_ORDER present, fallback to whatever exists
+        if not events_present:
+            events_present = sorted(display_df["Event"].unique())
 
-        # CSV download
-        csv_bytes = shown.to_csv(index=False).encode("utf-8")
-        st.download_button("Download CSV", data=csv_bytes, file_name="ata_standings.csv", mime="text/csv")
+        st.write(f"Showing {len(display_df)} competitor rows for {selected_region}")
 
-        # Score column summary
-        score_col = _detect_score_column(shown)
-        if score_col:
-            st.write(f"Detected score column: **{score_col}**")
-            numeric = pd.to_numeric(shown[score_col].astype(str).str.replace(r'[^\d\.\-]', '', regex=True), errors='coerce')
-            if numeric.notna().any():
-                top10 = shown.assign(_score=numeric).sort_values("_score", ascending=False).head(10)
-                st.subheader("Top 10 by score")
-                st.table(top10.drop(columns=["_score"]).reset_index(drop=True))
+        for event in events_present:
+            st.subheader(event)
+            ev_df = display_df[display_df["Event"] == event].sort_values(["Rank", "Name"]).reset_index(drop=True)
+            st.dataframe(ev_df, use_container_width=True)
