@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import re
 
 # Event keyword mapping (used to identify which <li> corresponds to which event)
 EVENT_KEYWORDS = {
@@ -50,7 +51,7 @@ def get_event_name_from_text(text: str):
 def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, country: str = "US") -> pd.DataFrame:
     """
     Scrape the state standings page for the given division code.
-    Looks for <li> elements that contain event keywords and grabs the next <table>.
+    Looks for <li> elements that contain event keywords and grabs the next sibling <table>.
     Returns rows with Name, Event, Points, State/Province, Country, and Rank.
     """
     url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={division_code}"
@@ -58,23 +59,26 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
-    except Exception as e:
-        # Return empty DataFrame on any request problem
-        st.warning(f"Error fetching data for {state_code}: {e}")
+    except Exception:
+        # silently skip errors (like missing pages)
         return pd.DataFrame()
 
     soup = BeautifulSoup(resp.text, "html.parser")
     rows_data = []
 
-    # Find all list items and attempt to identify event names, then parse the following table
+    # Find all <li> elements and attempt to identify event names, then parse the next sibling <table>
     for li in soup.find_all("li"):
         li_text = li.get_text(strip=True)
         event_name = get_event_name_from_text(li_text)
         if not event_name:
             continue
 
-        # Get the next table after this li
-        table = li.find_next("table")
+        # Find the next sibling table element after this <li>
+        table = None
+        for sibling in li.next_siblings:
+            if getattr(sibling, "name", None) == "table":
+                table = sibling
+                break
         if not table:
             continue
 
@@ -89,7 +93,6 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
                 pts_key = candidate
                 break
         if "Name" not in col_idx or pts_key is None:
-            # If required columns not present, skip this table
             continue
 
         # Parse rows
@@ -101,13 +104,17 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
                 continue
 
             name = tds[col_idx["Name"]].get_text(strip=True)
-            pts_text = tds[col_idx[pts_key]].get_text(strip=True).replace(",", "").strip()
+            pts_text = tds[col_idx[pts_key]].get_text(strip=True)
 
-            # Try parse points (allow integers or floats). If not parseable, skip.
-            try:
-                # Points may be integer or float; treat as float for safety
-                points = float(pts_text)
-            except Exception:
+            # Extract number (remove commas, ignore non-digit)
+            match = re.search(r"[\d,.]+", pts_text)
+            if match:
+                pts_clean = match.group(0).replace(",", "")
+                try:
+                    points = float(pts_clean)
+                except ValueError:
+                    continue
+            else:
                 continue
 
             # Include only competitors who have > 0 points
@@ -177,13 +184,6 @@ if selected_region == "All":
         df = df.sort_values(["Event", "Name", "Points"], ascending=[True, True, False])
         df = df.drop_duplicates(subset=["Event", "Name"], keep="first").reset_index(drop=True)
 
-        # Calculate total points per competitor (across all events)
-        total_points = df.groupby("Name")["Points"].sum().reset_index()
-        total_points = total_points.rename(columns={"Points": "Total Points"})
-
-        # Merge total points back into df
-        df = df.merge(total_points, on="Name", how="left")
-
         # Recalculate Rank per event by descending points
         df["Rank"] = df.groupby("Event")["Points"].rank(method="min", ascending=False).astype(int)
 
@@ -219,7 +219,7 @@ if selected_region == "All":
                 # Recalculate Rank to match sorting
                 ev_df["Rank"] = ev_df["Points"].rank(method="min", ascending=False).astype(int)
 
-                display_cols = ["Rank", "Name", "Points", "Total Points", "State/Province", "Country"]
+                display_cols = ["Rank", "Name", "Points", "State/Province", "Country"]
 
                 st.dataframe(ev_df[display_cols], use_container_width=True)
 
