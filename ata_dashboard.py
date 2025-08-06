@@ -1,118 +1,179 @@
-import streamlit as st
+# app.py
+"""
+ATA Tournament Standings Scraper & Dashboard
+
+Usage:
+    pip install -r requirements.txt
+    streamlit run app.py
+
+Default: Fetches ATA Worlds standings and dedupes competitors.
+"""
+
+import re
+from typing import List, Optional
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import streamlit as st
+from datetime import datetime
 
-# Event keyword mapping
-EVENT_KEYWORDS = {
-    "Forms": "Forms",
-    "Weapons": "Weapons",
-    "Combat": "Combat Weapons",
-    "Sparring": "Sparring",
-    "Creative Forms": "Creative Forms",
-    "Creative Weapons": "Creative Weapons",
-    "X-Treme Forms": "X-Treme Forms",
-    "X-Treme Weapons": "X-Treme Weapons",
-}
+# ---------------------------
+# Configuration
+# ---------------------------
+DEFAULT_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings"
+REQUEST_TIMEOUT = 15  # seconds
 
-# US states + Canadian provinces
-REGIONS = [
-    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-    "AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK"
-]
+# ---------------------------
+# Scraper functions
+# ---------------------------
 
-# Detect event name from nearby text
-def get_event_name_from_text(text):
-    for keyword, event in EVENT_KEYWORDS.items():
-        if keyword.lower() in text.lower():
-            return event
-    return None
+def fetch_html(url: str) -> str:
+    """Fetch HTML from a URL."""
+    resp = requests.get(url, timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    return resp.text
 
-# Scrape data for one state
-@st.cache_data(show_spinner=False)
-def scrape_state_data(state_code, division_code="W01D", country="US"):
-    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={division_code}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        resp.raise_for_status()
-    except Exception as e:
-        st.warning(f"Error fetching data for {state_code}: {e}")
-        return pd.DataFrame()
+def _clean_event_name(text: str) -> str:
+    """Normalize event name."""
+    if not text:
+        return "Unknown Event"
+    return re.sub(r'\s+', ' ', text).strip()
 
-    soup = BeautifulSoup(resp.text, "html.parser")
-    data = []
+def parse_events_from_html(html: str) -> List[pd.DataFrame]:
+    """Extract events and tables from ATA standings page HTML."""
+    soup = BeautifulSoup(html, "html.parser")
+    events: List[pd.DataFrame] = []
 
-    # Find event headers and matching tables
+    # Primary: <li> header + next <table>
     for li in soup.find_all("li"):
-        li_text = li.get_text(strip=True)
-        event_name = get_event_name_from_text(li_text)
-        if not event_name:
-            continue
-
+        event_name = _clean_event_name(li.get_text(separator=" ", strip=True))
         table = li.find_next("table")
-        if not table:
-            continue
-
-        headers = [th.get_text(strip=True) for th in table.find_all("th")]
-        col_idx = {key: i for i, key in enumerate(headers)}
-
-        if "Name" not in col_idx or "Pts" not in col_idx:
-            continue
-
-        rows = table.find_all("tr")[1:]
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) < len(headers):
-                continue
-
-            name = cols[col_idx["Name"]].get_text(strip=True)
-            pts_text = cols[col_idx["Pts"]].get_text(strip=True).replace(",", "")
+        if table:
             try:
-                points = float(pts_text)
+                df = pd.read_html(str(table))[0]
             except ValueError:
                 continue
+            df["Event"] = event_name
+            events.append(df)
 
-            if points > 0:
-                data.append({
-                    "Name": name,
-                    "Event": event_name,
-                    "Points": points,
-                    "State/Province": state_code,
-                    "Country": country
-                })
+    # Fallback: all tables + nearest heading
+    if not events:
+        for table in soup.find_all("table"):
+            try:
+                df = pd.read_html(str(table))[0]
+            except ValueError:
+                continue
+            heading_tag = table.find_previous(["h1", "h2", "h3", "h4", "p", "div"])
+            event_name = _clean_event_name(heading_tag.get_text(" ", strip=True)) if heading_tag else "Unknown Event"
+            df["Event"] = event_name
+            events.append(df)
 
-    df = pd.DataFrame(data)
-    if not df.empty:
-        df['Rank'] = df.groupby('Event')['Points'].rank(method='first', ascending=False).astype(int)
-        df = df[['Rank', 'Name', 'Points', 'State/Province', 'Country', 'Event']]
+    return events
 
-    return df
+def _detect_score_column(df: pd.DataFrame) -> Optional[str]:
+    """Detect numeric score column heuristically."""
+    if df is None or df.empty:
+        return None
+    # Check column names
+    name_candidates = [c for c in df.columns if re.search(r'score|points|total|avg|judge', str(c), flags=re.I)]
+    if name_candidates:
+        return name_candidates[0]
+    # Check numeric content
+    for col in df.columns:
+        coerced = pd.to_numeric(df[col].astype(str).str.replace(r'[^\d\.\-]', '', regex=True), errors='coerce')
+        if coerced.notna().mean() >= 0.5:
+            return col
+    return None
 
+def dedupe_event_df(df: pd.DataFrame, method: str = "first", competitor_col_hint: Optional[str] = None) -> pd.DataFrame:
+    """Dedupe competitors within one event."""
+    if method == "all":
+        return df.copy()
+    # Find competitor column
+    if competitor_col_hint and competitor_col_hint in df.columns:
+        comp_col = competitor_col_hint
+    else:
+        comp_cols = [c for c in df.columns if re.search(r'competitor|name|athlete', str(c), flags=re.I)]
+        if comp_cols:
+            comp_col = comp_cols[0]
+        else:
+            comp_col = df.columns[0]
+    df[comp_col] = df[comp_col].astype(str).str.strip()
+
+    if method == "first":
+        return df.drop_duplicates(subset=[comp_col], keep="first").reset_index(drop=True)
+
+    # method == "best"
+    score_col = _detect_score_column(df)
+    if not score_col:
+        return df.drop_duplicates(subset=[comp_col], keep="first").reset_index(drop=True)
+    numeric_score = pd.to_numeric(df[score_col].astype(str).str.replace(r'[^\d\.\-]', '', regex=True), errors='coerce')
+    df["_numeric_score_tmp"] = numeric_score
+    idx = df.sort_values("_numeric_score_tmp", ascending=False).groupby(comp_col, sort=False).head(1).index
+    return df.loc[idx].drop(columns=["_numeric_score_tmp"]).reset_index(drop=True)
+
+def combine_events(events: List[pd.DataFrame], dedupe_method: str = "first", competitor_col_hint: Optional[str] = None) -> pd.DataFrame:
+    """Combine all events after deduping each."""
+    processed = [dedupe_event_df(ev, method=dedupe_method, competitor_col_hint=competitor_col_hint) for ev in events]
+    combined = pd.concat(processed, ignore_index=True, sort=False)
+    if "Event" in combined.columns:
+        cols = ["Event"] + [c for c in combined.columns if c != "Event"]
+        combined = combined[cols]
+    return combined
+
+def fetch_and_process(url: str, dedupe_method: str = "first", competitor_col_hint: Optional[str] = None) -> pd.DataFrame:
+    """Pipeline: fetch HTML, parse events, combine."""
+    html = fetch_html(url)
+    events = parse_events_from_html(html)
+    return combine_events(events, dedupe_method, competitor_col_hint)
+
+# ---------------------------
 # Streamlit UI
-st.title("ATA Martial Arts Standings (Women 50–59, 1st Degree)")
+# ---------------------------
+st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
+st.title("ATA Tournament Standings")
 
-selected_state = st.selectbox("Select a State or Province", REGIONS)
-selected_event = st.selectbox("Select an Event (or view all)", ["All"] + list(EVENT_KEYWORDS.values()))
-name_filter = st.text_input("Filter by Competitor Name (optional)").lower()
+st.sidebar.header("Settings")
+url = st.sidebar.text_input("Standings URL", value=DEFAULT_URL)
+dedupe = st.sidebar.selectbox("Dedupe method", ["first", "best", "all"])
+competitor_hint = st.sidebar.text_input("Competitor column name (optional)", value="")
+ttl = st.sidebar.number_input("Cache TTL (seconds)", value=300, min_value=30, step=30)
+fetch_now = st.sidebar.button("Fetch / Refresh")
 
-df = scrape_state_data(selected_state)
+@st.cache_data(ttl=ttl)
+def load_data(url, dedupe, competitor_hint):
+    return fetch_and_process(url, dedupe, competitor_hint if competitor_hint else None)
 
-if df.empty:
-    st.info("No results found for this region.")
-else:
-    if name_filter:
-        df = df[df["Name"].str.lower().str.contains(name_filter)]
+if ("data" not in st.session_state) or fetch_now:
+    try:
+        with st.spinner("Fetching data..."):
+            st.session_state["data"] = load_data(url, dedupe, competitor_hint)
+            st.success(f"Fetched at {datetime.now().strftime('%H:%M:%S')}")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
-    if selected_event != "All":
-        df = df[df["Event"] == selected_event]
+if "data" in st.session_state:
+    df = st.session_state["data"]
+    if df.empty:
+        st.warning("No data found.")
+    else:
+        st.write(f"**Rows:** {len(df)} | **Columns:** {len(df.columns)}")
+        events = ["All Events"] + sorted(df["Event"].dropna().unique().tolist())
+        chosen_event = st.selectbox("Filter by Event", events)
+        shown = df if chosen_event == "All Events" else df[df["Event"] == chosen_event]
+        st.dataframe(shown, use_container_width=True)
 
-    # Display each event in its own table
-    for event in df["Event"].unique():
-        event_df = df[df["Event"] == event].sort_values("Rank")
-        st.subheader(f"{event}")
-        st.dataframe(event_df.reset_index(drop=True), use_container_width=True)
+        # CSV download
+        csv_bytes = shown.to_csv(index=False).encode("utf-8")
+        st.download_button("Download CSV", data=csv_bytes, file_name="ata_standings.csv", mime="text/csv")
+
+        # Score column summary
+        score_col = _detect_score_column(shown)
+        if score_col:
+            st.write(f"Detected score column: **{score_col}**")
+            numeric = pd.to_numeric(shown[score_col].astype(str).str.replace(r'[^\d\.\-]', '', regex=True), errors='coerce')
+            if numeric.notna().any():
+                top10 = shown.assign(_score=numeric).sort_values("_score", ascending=False).head(10)
+                st.subheader("Top 10 by score")
+                st.table(top10.drop(columns=["_score"]).reset_index(drop=True))
