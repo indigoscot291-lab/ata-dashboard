@@ -1,121 +1,89 @@
-import streamlit as st
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+import re
 
-EVENT_ORDER = [
-    "Forms", "Weapons", "Combat Weapons", "Sparring",
-    "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
-]
+DIVISION_CODE = "W01D"
+STATE_CODE = "FL"
+COUNTRY_CODE = "US"
 
-REGIONS = [
-    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
-    "KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY",
-    "NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
-    "AB","BC","MB","NB","NL","NS","ON","PE","QC","SK"
-]
-
-DIVISION_CODE = "W01D"  # Women 1st Degree Black Belt 50-59
-
-def get_country_for_region(region: str) -> str:
-    ca = {"AB","BC","MB","NB","NL","NS","ON","PE","QC","SK"}
-    return "CA" if region in ca else "US"
-
-@st.cache_data(show_spinner=False)
-def scrape_state_data(state_code: str, state_name: str) -> pd.DataFrame:
-    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={get_country_for_region(state_code)}&state={state_code}&code={DIVISION_CODE}"
-    try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-    except:
-        return pd.DataFrame()
+def get_florida_standings():
+    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={COUNTRY_CODE}&state={STATE_CODE}&code={DIVISION_CODE}"
+    print(f"Fetching URL: {url}")
+    resp = requests.get(url)
+    if resp.status_code != 200:
+        print(f"Failed to fetch page: status code {resp.status_code}")
+        return None
 
     soup = BeautifulSoup(resp.text, "html.parser")
     content_div = soup.find("div", class_="tab-content")
     if not content_div:
-        return pd.DataFrame()
+        print("Could not find main standings container (div.tab-content).")
+        return None
 
-    rows = []
-    current_event = None
+    all_results = []
 
+    # Loop through all <li> items inside content_div
     for li in content_div.find_all("li"):
         span = li.find("span", class_="text-primary text-uppercase")
         if span:
             event_name = span.get_text(strip=True)
-            if event_name not in EVENT_ORDER:
-                continue
-            current_event = event_name
+            print(f"\nFound event: '{event_name}'")
 
-            # Find next sibling table after this li
+            # Find the next table sibling after this li
             table = None
             for sibling in li.next_siblings:
                 if hasattr(sibling, "name") and sibling.name == "table":
                     table = sibling
                     break
+
             if not table:
+                print(f"No table found after event '{event_name}'")
                 continue
 
+            # Parse the table headers
             headers = [th.get_text(strip=True) for th in table.find_all("th")]
+            print(f"Table headers: {headers}")
+
             if "Name" not in headers or not any(k in headers for k in ("Pts", "Points", "PTS")):
+                print(f"Table for event '{event_name}' missing required columns.")
                 continue
+
             idx = {h: i for i, h in enumerate(headers)}
             pts_key = next((k for k in ("Pts", "Points", "PTS") if k in idx), None)
 
+            # Parse competitor rows
             for tr in table.find_all("tr")[1:]:
                 tds = tr.find_all("td")
                 if len(tds) <= max(idx["Name"], idx[pts_key]):
                     continue
                 name = tds[idx["Name"]].get_text(strip=True)
-                raw = tds[idx[pts_key]].get_text(strip=True)
-                try:
-                    points = float(raw.replace(",", ""))
-                except:
-                    continue
-                if points > 0:
-                    rows.append({"Name": name, "Event": current_event, "Points": points, "State": state_name})
-
-    if not rows:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(rows)
-    df = df.drop_duplicates(subset=["Event", "Name"], keep="first").reset_index(drop=True)
-    df["Rank"] = df.groupby("Event")["Points"].rank(method="min", ascending=False).astype(int)
-    return df
-
-st.set_page_config(page_title="ATA W01D Standings", layout="wide")
-st.title("ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
-
-selected_state = st.selectbox("Select State or Province", ["All"] + REGIONS)
-selected_event = st.selectbox("Select Event", ["All"] + EVENT_ORDER)
-name_filter = st.text_input("Filter by competitor name (optional)").strip().lower()
-search_button = st.button("Go")
-
-if search_button:
-    states_to_search = REGIONS if selected_state == "All" else [selected_state]
-    all_results = []
-    with st.spinner("Fetching data..."):
-        for state in states_to_search:
-            df_state = scrape_state_data(state, state)
-            if not df_state.empty:
-                all_results.append(df_state)
+                raw_points = tds[idx[pts_key]].get_text(strip=True)
+                # Extract numeric part from points string
+                m = re.search(r"[\d,.]+", raw_points)
+                if m:
+                    points = float(m.group(0).replace(",", ""))
+                    if points > 0:
+                        all_results.append({
+                            "Event": event_name,
+                            "Name": name,
+                            "Points": points
+                        })
+                        print(f" - Competitor: {name}, Points: {points}")
+                else:
+                    print(f"Could not parse points for competitor '{name}' in event '{event_name}': '{raw_points}'")
 
     if not all_results:
-        st.info("No results found for selected criteria.")
+        print("No competitors with points found.")
+        return None
+
+    df = pd.DataFrame(all_results)
+    return df
+
+if __name__ == "__main__":
+    df = get_florida_standings()
+    if df is not None:
+        print("\nAll extracted standings:")
+        print(df)
     else:
-        df = pd.concat(all_results, ignore_index=True)
-
-        if selected_event != "All":
-            df = df[df["Event"] == selected_event]
-        if name_filter:
-            df = df[df["Name"].str.lower().str.contains(name_filter)]
-
-        if df.empty:
-            st.info("No matches after filtering.")
-        else:
-            for event in EVENT_ORDER:
-                event_df = df[df["Event"] == event]
-                if not event_df.empty:
-                    event_df = event_df.sort_values(by=["Points", "Name"], ascending=[False, True])
-                    event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
-                    st.subheader(event)
-                    st.dataframe(event_df[["Rank", "Name", "Points", "State"]], use_container_width=True)
+        print("No data extracted.")
