@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 DIVISION_CODE = "W01D"
 COUNTRY_CODES = {"US": "United States", "CA": "Canada"}
 
-# US states + Canadian provinces abbreviations
 US_STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
     "KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY",
@@ -18,12 +17,7 @@ CAN_PROVINCES = [
     "AB","BC","MB","NB","NL","NS","ON","PE","QC","SK","NT","NU","YT"
 ]
 
-# Create a combined list with country codes for URLs
 REGIONS = [("US", st) for st in US_STATES] + [("CA", pr) for pr in CAN_PROVINCES]
-REGION_NAMES = {
-    **{st: st for st in US_STATES},
-    **{pr: pr for pr in CAN_PROVINCES}
-}
 
 def scrape_region_standings(country_code, state_code):
     url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country_code}&state={state_code}&code={DIVISION_CODE}"
@@ -82,7 +76,6 @@ def scrape_region_standings(country_code, state_code):
 
 st.title("ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
 
-# Build region selection list
 region_options = ["All"] + [f"{country_code}-{code}" for country_code, code in REGIONS]
 selected_region = st.selectbox("Select State/Province (or All):", region_options)
 
@@ -94,33 +87,43 @@ if st.button("Fetch Standings"):
         total = len(REGIONS)
         for i, (country_code, state_code) in enumerate(REGIONS, 1):
             st.write(f"Fetching {country_code}-{state_code}...")
-            df, logs = scrape_region_standings(country_code, state_code)
-            all_dfs.append(df)
+            df_region, logs = scrape_region_standings(country_code, state_code)
+            all_dfs.append(df_region)
             all_logs.extend(logs)
             progress.progress(i / total)
         combined_df = pd.concat(all_dfs, ignore_index=True)
         df = combined_df
         logs = all_logs
+
+        st.subheader("Debug Logs")
+        for log in logs:
+            st.text(log)
+
+        if df.empty:
+            st.info("No competitors with points found.")
+        else:
+            st.subheader("All Competitors Combined (Sorted by Points)")
+            df_sorted = df.sort_values(by="Points", ascending=False).reset_index(drop=True)
+            df_sorted["Rank"] = df_sorted["Points"].rank(method="min", ascending=False).astype(int)
+            display_cols = ["Rank", "Country", "Region", "Place", "Name", "Points", "Location"]
+            st.dataframe(df_sorted[display_cols])
+
     else:
         country_code, state_code = selected_region.split("-")
         df, logs = scrape_region_standings(country_code, state_code)
 
-    st.subheader("Debug Logs")
-    for log in logs:
-        st.text(log)
+        st.subheader("Debug Logs")
+        for log in logs:
+            st.text(log)
 
-    if df.empty:
-        st.info("No competitors with points found.")
-    else:
-        st.subheader("Competitor Standings")
-        # Show events grouped, no split by region if "All"
-        events = df["Event"].unique()
-        for event in sorted(events):
-            st.markdown(f"### {event}")
-            event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
-            event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
-            display_cols = ["Rank", "Place", "Name", "Points", "Location"]
-            if selected_region == "All":
-                display_cols.insert(1, "Region")
-                display_cols.insert(1, "Country")
-            st.dataframe(event_df[display_cols])
+        if df.empty:
+            st.info("No competitors with points found.")
+        else:
+            st.subheader("Competitor Standings")
+            events = df["Event"].unique()
+            for event in sorted(events):
+                st.markdown(f"### {event}")
+                event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
+                event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
+                display_cols = ["Rank", "Place", "Name", "Points", "Location"]
+                st.dataframe(event_df[display_cols])
