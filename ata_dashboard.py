@@ -26,6 +26,12 @@ def scrape_region_standings(country_code, state_code):
         return pd.DataFrame(), [f"Failed to fetch {country_code}-{state_code} (status {resp.status_code})"]
 
     soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Check if the page says no standings found
+    no_results_text = soup.find(text=lambda t: t and "No standings found" in t)
+    if no_results_text:
+        return pd.DataFrame(), [f"No standings data for {country_code}-{state_code}"]
+
     debug_logs = []
     results = []
 
@@ -104,13 +110,12 @@ if st.button("Fetch Standings"):
         else:
             st.subheader("All Competitors Combined by Event")
 
-            # Show per-event tables, sorted by points, include Country and Region columns
             for event in sorted(df["Event"].unique()):
                 st.markdown(f"### {event}")
                 event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
                 event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
                 display_cols = ["Rank", "Country", "Region", "Place", "Name", "Points", "Location"]
-                st.dataframe(event_df[display_cols])
+                st.dataframe(event_df[display_cols], height=600)
 
     else:
         country_code, state_code = selected_region.split("-")
@@ -125,10 +130,9 @@ if st.button("Fetch Standings"):
         else:
             st.subheader("Competitor Standings")
 
-            # Show events grouped, only for single region (no Country/Region columns)
             for event in sorted(df["Event"].unique()):
                 st.markdown(f"### {event}")
                 event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
                 event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
                 display_cols = ["Rank", "Place", "Name", "Points", "Location"]
-                st.dataframe(event_df[display_cols])
+                st.dataframe(event_df[display_cols], height=600)
