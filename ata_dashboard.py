@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import re
 
 DIVISION_CODE = "W01D"
 STATE_CODE = "FL"
@@ -14,68 +13,53 @@ def scrape_florida_standings():
     resp = requests.get(url)
     if resp.status_code != 200:
         st.error(f"Failed to fetch page: status code {resp.status_code}")
-        return pd.DataFrame(), []
+        return pd.DataFrame(), ["Failed to fetch page"]
 
     soup = BeautifulSoup(resp.text, "html.parser")
-    content_div = soup.find("div", class_="tab-content")
-    if not content_div:
-        st.error("Could not find main standings container (div.tab-content).")
-        return pd.DataFrame(), []
-
-    all_results = []
     debug_logs = []
+    results = []
 
-    for li in content_div.find_all("li"):
-        span = li.find("span", class_="text-primary text-uppercase")
-        if span:
-            event_name = span.get_text(strip=True)
-            debug_logs.append(f"\nFound event: '{event_name}'")
+    for ul in soup.find_all("ul", class_="tournament-header"):
+        li_span = ul.find("li").find("span", class_="text-primary text-uppercase")
+        if not li_span:
+            continue
+        event_name = li_span.get_text(strip=True)
+        debug_logs.append(f"Found event: {event_name}")
 
-            # Find the next table sibling after this li
-            table = None
-            for sibling in li.next_siblings:
-                if hasattr(sibling, "name") and sibling.name == "table":
-                    table = sibling
-                    break
+        next_div = ul.find_next_sibling("div", class_="table-responsive")
+        if not next_div:
+            debug_logs.append(f"No table container found for event {event_name}")
+            continue
 
-            if not table:
-                debug_logs.append(f"No table found after event '{event_name}'")
+        table = next_div.find("table")
+        if not table:
+            debug_logs.append(f"No table found inside div for event {event_name}")
+            continue
+
+        for tr in table.tbody.find_all("tr"):
+            tds = tr.find_all("td")
+            if len(tds) < 4:
                 continue
+            place = tds[0].get_text(strip=True)
+            name = tds[1].get_text(strip=True)
+            points = tds[2].get_text(strip=True)
+            location = tds[3].get_text(strip=True)
+            try:
+                points_val = float(points.replace(",", ""))
+            except:
+                points_val = 0
 
-            headers = [th.get_text(strip=True) for th in table.find_all("th")]
-            debug_logs.append(f"Table headers: {headers}")
+            if points_val > 0:
+                results.append({
+                    "Event": event_name,
+                    "Place": place,
+                    "Name": name,
+                    "Points": points_val,
+                    "Location": location,
+                })
+                debug_logs.append(f" - Competitor: {name}, Points: {points_val}")
 
-            if "Name" not in headers or not any(k in headers for k in ("Pts", "Points", "PTS")):
-                debug_logs.append(f"Table for event '{event_name}' missing required columns.")
-                continue
-
-            idx = {h: i for i, h in enumerate(headers)}
-            pts_key = next((k for k in ("Pts", "Points", "PTS") if k in idx), None)
-
-            for tr in table.find_all("tr")[1:]:
-                tds = tr.find_all("td")
-                if len(tds) <= max(idx["Name"], idx[pts_key]):
-                    continue
-                name = tds[idx["Name"]].get_text(strip=True)
-                raw_points = tds[idx[pts_key]].get_text(strip=True)
-                m = re.search(r"[\d,.]+", raw_points)
-                if m:
-                    points = float(m.group(0).replace(",", ""))
-                    if points > 0:
-                        all_results.append({
-                            "Event": event_name,
-                            "Name": name,
-                            "Points": points
-                        })
-                        debug_logs.append(f" - Competitor: {name}, Points: {points}")
-                else:
-                    debug_logs.append(f"Could not parse points for competitor '{name}' in event '{event_name}': '{raw_points}'")
-
-    if not all_results:
-        st.info("No competitors with points found.")
-        return pd.DataFrame(), debug_logs
-
-    df = pd.DataFrame(all_results)
+    df = pd.DataFrame(results)
     return df, debug_logs
 
 st.title("Florida ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
@@ -87,10 +71,12 @@ if st.button("Fetch Florida Standings"):
     for log in logs:
         st.text(log)
 
-    if not df.empty:
+    if df.empty:
+        st.info("No competitors with points found.")
+    else:
         st.subheader("Competitor Standings")
-        for event in sorted(df["Event"].unique(), key=lambda e: e):
+        for event in sorted(df["Event"].unique()):
             st.markdown(f"### {event}")
             event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
             event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
-            st.dataframe(event_df[["Rank", "Name", "Points"]])
+            st.dataframe(event_df[["Rank", "Place", "Name", "Points", "Location"]])
