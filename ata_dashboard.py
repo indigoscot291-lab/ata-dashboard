@@ -27,6 +27,18 @@ REGIONS = [
 
 DIVISION_CODE = "W01D"  # Women 1st Degree, 50-59
 
+# canonical event display order
+EVENT_ORDER = [
+    "Forms",
+    "Weapons",
+    "Combat Weapons",
+    "Sparring",
+    "Creative Forms",
+    "Creative Weapons",
+    "X-Treme Forms",
+    "X-Treme Weapons",
+]
+
 def get_event_name_from_text(text: str):
     """Return canonical event name if any keyword matches header text (case-insensitive)."""
     for keyword, event in EVENT_KEYWORDS.items():
@@ -126,20 +138,42 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
     return df
 
 # -----------------------
+# Helper for country detection
+# -----------------------
+def get_country_for_region(region: str) -> str:
+    ca_list = {"AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK"}
+    return "CA" if region in ca_list else "US"
+
+# -----------------------
 # Streamlit UI
 # -----------------------
 st.set_page_config(page_title="ATA W01D Standings", layout="wide")
 st.title("ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
 
-selected_region = st.selectbox("Select State or Province", REGIONS)
-country = "CA" if selected_region in ["AB", "BC", "MB", "NB", "NL", "NS", "ON", "PE", "QC", "SK"] else "US"
+# Add "All" option
+region_options = ["All"] + REGIONS
+selected_region = st.selectbox("Select State or Province", region_options)
 
-# Fetch only when a region is selected (on page load, a region is already selected)
-with st.spinner(f"Loading standings for {selected_region}..."):
-    df = scrape_state_data(selected_region, division_code=DIVISION_CODE, country=country)
+# Fetch data: single region on demand, or all regions if "All" selected
+if selected_region == "All":
+    all_dfs = []
+    with st.spinner("Loading standings for all regions... this may take a bit..."):
+        for region in REGIONS:
+            country = get_country_for_region(region)
+            df_state = scrape_state_data(region, division_code=DIVISION_CODE, country=country)
+            if not df_state.empty:
+                all_dfs.append(df_state)
+    if all_dfs:
+        df = pd.concat(all_dfs, ignore_index=True)
+    else:
+        df = pd.DataFrame()
+else:
+    country = get_country_for_region(selected_region)
+    with st.spinner(f"Loading standings for {selected_region}..."):
+        df = scrape_state_data(selected_region, division_code=DIVISION_CODE, country=country)
 
 if df.empty:
-    st.info("No results found for this region (or no competitors with points).")
+    st.info("No results found for this selection (or no competitors with points).")
 else:
     # Event dropdown (All or single event)
     event_options = ["All"] + sorted(df["Event"].unique())
@@ -158,19 +192,8 @@ else:
     if display_df.empty:
         st.info("No competitors match the selected filters.")
     else:
-        # Display each event in fixed order if present; otherwise show events found
-        EVENT_ORDER = [
-            "Forms",
-            "Weapons",
-            "Combat Weapons",
-            "Sparring",
-            "Creative Forms",
-            "Creative Weapons",
-            "X-Treme Forms",
-            "X-Treme Weapons",
-        ]
+        # Show events in fixed order if present; otherwise fallback to whatever exists
         events_present = [e for e in EVENT_ORDER if e in display_df["Event"].unique()]
-        # if none from EVENT_ORDER present, fallback to whatever exists
         if not events_present:
             events_present = sorted(display_df["Event"].unique())
 
