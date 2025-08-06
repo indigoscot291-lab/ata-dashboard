@@ -49,11 +49,6 @@ def get_event_name_from_text(text: str):
 
 @st.cache_data(ttl=600, show_spinner=False)
 def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, country: str = "US") -> pd.DataFrame:
-    """
-    Scrape the state standings page for the given division code.
-    Looks for <li> elements that contain event keywords and grabs the next sibling <table>.
-    Returns rows with Name, Event, Points, State/Province, Country, and Rank.
-    """
     url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={division_code}"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
@@ -66,27 +61,24 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
     soup = BeautifulSoup(resp.text, "html.parser")
     rows_data = []
 
-    # Find all <li> elements and attempt to identify event names, then parse the next sibling <table>
     for li in soup.find_all("li"):
         li_text = li.get_text(strip=True)
         event_name = get_event_name_from_text(li_text)
         if not event_name:
             continue
 
-        # Find the next sibling table element after this <li>
+        # safer next sibling table search:
         table = None
         for sibling in li.next_siblings:
-            if getattr(sibling, "name", None) == "table":
+            if hasattr(sibling, "name") and sibling.name == "table":
                 table = sibling
                 break
         if not table:
             continue
 
-        # Read column headers from the table
         th_texts = [th.get_text(strip=True) for th in table.find_all("th")]
         col_idx = {name: idx for idx, name in enumerate(th_texts)}
 
-        # Must contain Name and Pts (Pts or Points may vary)
         pts_key = None
         for candidate in ("Pts", "Points", "PTS"):
             if candidate in col_idx:
@@ -95,18 +87,15 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
         if "Name" not in col_idx or pts_key is None:
             continue
 
-        # Parse rows
         tr_rows = table.find_all("tr")[1:]  # skip header row
         for tr in tr_rows:
             tds = tr.find_all("td")
-            # ensure enough columns
             if len(tds) <= max(col_idx["Name"], col_idx[pts_key]):
                 continue
 
             name = tds[col_idx["Name"]].get_text(strip=True)
             pts_text = tds[col_idx[pts_key]].get_text(strip=True)
 
-            # Extract number (remove commas, ignore non-digit)
             match = re.search(r"[\d,.]+", pts_text)
             if match:
                 pts_clean = match.group(0).replace(",", "")
@@ -117,7 +106,6 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
             else:
                 continue
 
-            # Include only competitors who have > 0 points
             if points > 0:
                 rows_data.append({
                     "Name": name,
@@ -131,16 +119,9 @@ def scrape_state_data(state_code: str, division_code: str = DIVISION_CODE, count
         return pd.DataFrame()
 
     df = pd.DataFrame(rows_data)
-
-    # Deduplication within a single scrape (rare)
     df = df.drop_duplicates(subset=["Event", "Name"], keep="first").reset_index(drop=True)
-
-    # Rank per event within scrape (will be recalculated after combining)
     df["Rank"] = df.groupby("Event")["Points"].rank(method="min", ascending=False).astype(int)
-
-    # Reorder columns with Rank first
     df = df[["Rank", "Name", "Points", "State/Province", "Country", "Event"]]
-
     return df
 
 def get_country_for_region(region: str) -> str:
@@ -213,10 +194,8 @@ if selected_region == "All":
                 st.subheader(event)
                 ev_df = display_df[display_df["Event"] == event].copy()
 
-                # Sort by descending points, then ascending name
                 ev_df = ev_df.sort_values(["Points", "Name"], ascending=[False, True]).reset_index(drop=True)
 
-                # Recalculate Rank to match sorting
                 ev_df["Rank"] = ev_df["Points"].rank(method="min", ascending=False).astype(int)
 
                 display_cols = ["Rank", "Name", "Points", "State/Province", "Country"]
@@ -256,7 +235,6 @@ else:
                 st.subheader(event)
                 ev_df = display_df[display_df["Event"] == event].copy()
 
-                # Sort by descending points, then ascending name
                 ev_df = ev_df.sort_values(["Points", "Name"], ascending=[False, True]).reset_index(drop=True)
 
                 ev_df["Rank"] = ev_df["Points"].rank(method="min", ascending=False).astype(int)
