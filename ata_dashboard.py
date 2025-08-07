@@ -2,36 +2,44 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-from functools import lru_cache
 
-BASE_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/w01d-"
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
+# Map of regions to (country, state/province code)
 REGION_CODES = {
-    "Alabama": "al", "Alaska": "ak", "Arizona": "az", "Arkansas": "ar", "California": "ca",
-    "Colorado": "co", "Connecticut": "ct", "Delaware": "de", "Florida": "fl", "Georgia": "ga",
-    "Hawaii": "hi", "Idaho": "id", "Illinois": "il", "Indiana": "in", "Iowa": "ia", "Kansas": "ks",
-    "Kentucky": "ky", "Louisiana": "la", "Maine": "me", "Maryland": "md", "Massachusetts": "ma",
-    "Michigan": "mi", "Minnesota": "mn", "Mississippi": "ms", "Missouri": "mo", "Montana": "mt",
-    "Nebraska": "ne", "Nevada": "nv", "New Hampshire": "nh", "New Jersey": "nj", "New Mexico": "nm",
-    "New York": "ny", "North Carolina": "nc", "North Dakota": "nd", "Ohio": "oh", "Oklahoma": "ok",
-    "Oregon": "or", "Pennsylvania": "pa", "Rhode Island": "ri", "South Carolina": "sc",
-    "South Dakota": "sd", "Tennessee": "tn", "Texas": "tx", "Utah": "ut", "Vermont": "vt",
-    "Virginia": "va", "Washington": "wa", "West Virginia": "wv", "Wisconsin": "wi", "Wyoming": "wy",
-    "Alberta": "ab", "British Columbia": "bc", "Manitoba": "mb", "New Brunswick": "nb",
-    "Newfoundland and Labrador": "nl", "Nova Scotia": "ns", "Ontario": "on", "Prince Edward Island": "pe",
-    "Quebec": "qc", "Saskatchewan": "sk"
+    # US States (country=US)
+    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"), "Arkansas": ("US", "AR"),
+    "California": ("US", "CA"), "Colorado": ("US", "CO"), "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"),
+    "Florida": ("US", "FL"), "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
+    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"), "Kansas": ("US", "KS"),
+    "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"), "Maine": ("US", "ME"), "Maryland": ("US", "MD"),
+    "Massachusetts": ("US", "MA"), "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
+    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"), "Nevada": ("US", "NV"),
+    "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"), "New Mexico": ("US", "NM"), "New York": ("US", "NY"),
+    "North Carolina": ("US", "NC"), "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
+    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"), "South Carolina": ("US", "SC"),
+    "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"), "Texas": ("US", "TX"), "Utah": ("US", "UT"),
+    "Vermont": ("US", "VT"), "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
+    "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
+    # Canadian Provinces (country=CA)
+    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
+    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"), "Nova Scotia": ("CA", "NS"),
+    "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"), "Quebec": ("CA", "QC"),
+    "Saskatchewan": ("CA", "SK"),
 }
 
 REGIONS = list(REGION_CODES.keys())
 REGIONS.insert(0, "All")
 
+def build_url(country_code, state_code):
+    return f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country_code}&state={state_code}&code=W01D"
+
 @st.cache_data(show_spinner=False)
-def fetch_region_html(region_code):
-    url = f"{BASE_URL}{region_code}/"
+def fetch_region_html(country_code, state_code):
+    url = build_url(country_code, state_code)
     try:
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200:
@@ -41,7 +49,6 @@ def fetch_region_html(region_code):
     return None
 
 def parse_standings(html):
-    from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
     event_data = {}
     headers = soup.find_all("ul", class_="tournament-header")
@@ -54,7 +61,10 @@ def parse_standings(html):
         if event_name not in EVENT_NAMES:
             continue
         rows = []
-        for tr in table.find("tbody").find_all("tr"):
+        tbody = table.find("tbody")
+        if not tbody:
+            continue
+        for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
             if len(cols) == 4 and all(cols):
                 place, name, points, location = cols
@@ -76,11 +86,13 @@ def parse_standings(html):
 def gather_data_for_regions(regions):
     all_event_data = {event: [] for event in EVENT_NAMES}
     for region in regions:
-        region_code = REGION_CODES[region]
-        html = fetch_region_html(region_code)
+        country_code, state_code = REGION_CODES[region]
+        html = fetch_region_html(country_code, state_code)
         if not html:
             continue
         event_data = parse_standings(html)
+        if not event_data:
+            continue
         for event, entries in event_data.items():
             all_event_data[event].extend(entries)
     return all_event_data
