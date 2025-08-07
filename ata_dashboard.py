@@ -2,93 +2,126 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+from functools import lru_cache
 
-# --- Constants ---
-BASE_URL = "https://atamartialarts.com/events/tournament-standings/W01D/"
-REGIONS = [
-    "Alabama", "Alaska", "Arizona", "Arkansas", "British-Columbia", "California",
-    "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
-    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine",
-    "Manitoba", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
-    "Missouri", "Montana", "Nebraska", "Nevada", "New-Brunswick", "New-Hampshire",
-    "New-Jersey", "New-Mexico", "New-York", "Newfoundland-and-Labrador", "North-Carolina",
-    "North-Dakota", "Northwest-Territories", "Nova-Scotia", "Nunavut", "Ohio", "Oklahoma",
-    "Ontario", "Oregon", "Pennsylvania", "Prince-Edward-Island", "Quebec", "Rhode-Island",
-    "Saskatchewan", "South-Carolina", "South-Dakota", "Tennessee", "Texas", "Utah", "Vermont",
-    "Virginia", "Washington", "West-Virginia", "Wisconsin", "Wyoming", "Yukon"
+BASE_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/w01d-"
+EVENT_NAMES = [
+    "Forms", "Weapons", "Combat Weapons", "Sparring",
+    "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
-REGIONS.sort()
+
+REGION_CODES = {
+    "Alabama": "al", "Alaska": "ak", "Arizona": "az", "Arkansas": "ar", "California": "ca",
+    "Colorado": "co", "Connecticut": "ct", "Delaware": "de", "Florida": "fl", "Georgia": "ga",
+    "Hawaii": "hi", "Idaho": "id", "Illinois": "il", "Indiana": "in", "Iowa": "ia", "Kansas": "ks",
+    "Kentucky": "ky", "Louisiana": "la", "Maine": "me", "Maryland": "md", "Massachusetts": "ma",
+    "Michigan": "mi", "Minnesota": "mn", "Mississippi": "ms", "Missouri": "mo", "Montana": "mt",
+    "Nebraska": "ne", "Nevada": "nv", "New Hampshire": "nh", "New Jersey": "nj", "New Mexico": "nm",
+    "New York": "ny", "North Carolina": "nc", "North Dakota": "nd", "Ohio": "oh", "Oklahoma": "ok",
+    "Oregon": "or", "Pennsylvania": "pa", "Rhode Island": "ri", "South Carolina": "sc",
+    "South Dakota": "sd", "Tennessee": "tn", "Texas": "tx", "Utah": "ut", "Vermont": "vt",
+    "Virginia": "va", "Washington": "wa", "West Virginia": "wv", "Wisconsin": "wi", "Wyoming": "wy",
+    "Alberta": "ab", "British Columbia": "bc", "Manitoba": "mb", "New Brunswick": "nb",
+    "Newfoundland and Labrador": "nl", "Nova Scotia": "ns", "Ontario": "on", "Prince Edward Island": "pe",
+    "Quebec": "qc", "Saskatchewan": "sk"
+}
+
+REGIONS = list(REGION_CODES.keys())
 REGIONS.insert(0, "All")
 
-# --- Helper Functions ---
 @st.cache_data(show_spinner=False)
-def fetch_standings(region):
-    url = BASE_URL + region.replace(" ", "-")
+def fetch_region_html(region_code):
+    url = f"{BASE_URL}{region_code}/"
     try:
-        res = requests.get(url, timeout=10)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.text, 'html.parser')
-    except Exception as e:
-        st.warning(f"Could not load data for {region}: {e}")
-        return {}
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return resp.text
+    except:
+        pass
+    return None
 
-    all_results = {}
+def parse_standings(html):
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    event_data = {}
     headers = soup.find_all("ul", class_="tournament-header")
-
-    for header in headers:
-        event_type_tag = header.find("span", class_="text-primary")
-        if not event_type_tag:
+    tables = soup.find_all("table")
+    for header, table in zip(headers, tables):
+        event_name_tag = header.find("span", class_="text-primary text-uppercase")
+        if not event_name_tag:
             continue
-        event_type = event_type_tag.text.strip()
-        table = header.find_next("table")
-        if not table:
+        event_name = event_name_tag.get_text(strip=True)
+        if event_name not in EVENT_NAMES:
             continue
-
-        rows = table.find_all("tr")[1:]  # skip header row
-        data = []
-        for row in rows:
-            cols = [col.text.strip() for col in row.find_all("td")]
-            if len(cols) == 4 and all(cols):  # Avoid blank rows
+        rows = []
+        for tr in table.find("tbody").find_all("tr"):
+            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
+            if len(cols) == 4 and all(cols):
                 place, name, points, location = cols
-                data.append({
-                    "Place": place,
-                    "Name": name,
-                    "Points": int(points),
-                    "Location": location,
-                    "Region": region
-                })
+                try:
+                    points = int(points)
+                except:
+                    points = 0
+                if points > 0:
+                    rows.append({
+                        "Rank": int(place),
+                        "Name": name.title(),
+                        "Points": points,
+                        "Location": location.title()
+                    })
+        if rows:
+            event_data.setdefault(event_name, []).extend(rows)
+    return event_data
 
-        if data:
-            if event_type not in all_results:
-                all_results[event_type] = []
-            all_results[event_type].extend(data)
-
-    return all_results
-
-# --- Streamlit App ---
-st.title("ATA Tournament Standings by Region")
-
-selected_region = st.selectbox("Select a state or province", REGIONS)
-
-results_by_event = {}
-
-if selected_region == "All":
-    for region in REGIONS[1:]:  # Skip "All"
-        region_data = fetch_standings(region)
-        for event, competitors in region_data.items():
-            if event not in results_by_event:
-                results_by_event[event] = []
-            results_by_event[event].extend(competitors)
-else:
-    results_by_event = fetch_standings(selected_region)
-
-if not results_by_event:
-    st.info("No standings available for the selected region.")
-else:
-    for event_name, competitors in sorted(results_by_event.items()):
-        if not competitors:
+def gather_data_for_regions(regions):
+    all_event_data = {event: [] for event in EVENT_NAMES}
+    for region in regions:
+        region_code = REGION_CODES[region]
+        html = fetch_region_html(region_code)
+        if not html:
             continue
-        df = pd.DataFrame(competitors)
-        df = df.sort_values(by="Points", ascending=False).reset_index(drop=True)
-        st.subheader(f"{event_name} ({len(df)} competitors)")
-        st.dataframe(df, use_container_width=True)
+        event_data = parse_standings(html)
+        for event, entries in event_data.items():
+            all_event_data[event].extend(entries)
+    return all_event_data
+
+def dedupe_and_sort(event_data):
+    cleaned_data = {}
+    for event, entries in event_data.items():
+        seen = set()
+        unique_entries = []
+        for e in entries:
+            key = (e["Name"], e["Location"])
+            if key not in seen:
+                seen.add(key)
+                unique_entries.append(e)
+        unique_entries.sort(key=lambda x: x["Points"], reverse=True)
+        for idx, e in enumerate(unique_entries, 1):
+            e["Rank"] = idx
+        cleaned_data[event] = unique_entries
+    return cleaned_data
+
+st.title("ATA 1st Degree Women 50-59 Standings")
+selected_region = st.selectbox("Select State or Province", REGIONS)
+go = st.button("Go")
+
+if go:
+    if selected_region == "All":
+        regions = list(REGION_CODES.keys())
+    else:
+        regions = [selected_region]
+
+    with st.spinner("Fetching data..."):
+        raw_data = gather_data_for_regions(regions)
+        data = dedupe_and_sort(raw_data)
+
+    any_data = any(len(lst) > 0 for lst in data.values())
+    if not any_data:
+        st.warning("No results found for the selected region(s).")
+    else:
+        for event in EVENT_NAMES:
+            entries = data.get(event, [])
+            if entries:
+                df = pd.DataFrame(entries)[["Rank", "Name", "Points", "Location"]]
+                st.subheader(event)
+                st.dataframe(df, use_container_width=True)
