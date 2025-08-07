@@ -1,138 +1,94 @@
 import streamlit as st
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
 
-DIVISION_CODE = "W01D"
-COUNTRY_CODES = {"US": "United States", "CA": "Canada"}
-
-US_STATES = [
-    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
-    "KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY",
-    "NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV",
-    "WI","WY"
+# --- Constants ---
+BASE_URL = "https://atamartialarts.com/events/tournament-standings/W01D/"
+REGIONS = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "British-Columbia", "California",
+    "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine",
+    "Manitoba", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+    "Missouri", "Montana", "Nebraska", "Nevada", "New-Brunswick", "New-Hampshire",
+    "New-Jersey", "New-Mexico", "New-York", "Newfoundland-and-Labrador", "North-Carolina",
+    "North-Dakota", "Northwest-Territories", "Nova-Scotia", "Nunavut", "Ohio", "Oklahoma",
+    "Ontario", "Oregon", "Pennsylvania", "Prince-Edward-Island", "Quebec", "Rhode-Island",
+    "Saskatchewan", "South-Carolina", "South-Dakota", "Tennessee", "Texas", "Utah", "Vermont",
+    "Virginia", "Washington", "West-Virginia", "Wisconsin", "Wyoming", "Yukon"
 ]
+REGIONS.sort()
+REGIONS.insert(0, "All")
 
-CAN_PROVINCES = [
-    "AB","BC","MB","NB","NL","NS","ON","PE","QC","SK","NT","NU","YT"
-]
+# --- Helper Functions ---
+@st.cache_data(show_spinner=False)
+def fetch_standings(region):
+    url = BASE_URL + region.replace(" ", "-")
+    try:
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, 'html.parser')
+    except Exception as e:
+        st.warning(f"Could not load data for {region}: {e}")
+        return {}
 
-REGIONS = [("US", st) for st in US_STATES] + [("CA", pr) for pr in CAN_PROVINCES]
+    all_results = {}
+    headers = soup.find_all("ul", class_="tournament-header")
 
-def scrape_region_standings(country_code, state_code):
-    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country_code}&state={state_code}&code={DIVISION_CODE}"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        return pd.DataFrame(), [f"Failed to fetch {country_code}-{state_code} (status {resp.status_code})"]
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # Check if the page says no standings found
-    no_results_text = soup.find(text=lambda t: t and "No standings found" in t)
-    if no_results_text:
-        return pd.DataFrame(), [f"No standings data for {country_code}-{state_code}"]
-
-    debug_logs = []
-    results = []
-
-    for ul in soup.find_all("ul", class_="tournament-header"):
-        li_span = ul.find("li").find("span", class_="text-primary text-uppercase")
-        if not li_span:
+    for header in headers:
+        event_type_tag = header.find("span", class_="text-primary")
+        if not event_type_tag:
             continue
-        event_name = li_span.get_text(strip=True)
-        debug_logs.append(f"[{country_code}-{state_code}] Found event: {event_name}")
-
-        next_div = ul.find_next_sibling("div", class_="table-responsive")
-        if not next_div:
-            debug_logs.append(f"[{country_code}-{state_code}] No table container for event {event_name}")
-            continue
-
-        table = next_div.find("table")
+        event_type = event_type_tag.text.strip()
+        table = header.find_next("table")
         if not table:
-            debug_logs.append(f"[{country_code}-{state_code}] No table found inside div for event {event_name}")
             continue
 
-        for tr in table.tbody.find_all("tr"):
-            tds = tr.find_all("td")
-            if len(tds) < 4:
-                continue
-            place = tds[0].get_text(strip=True)
-            name = tds[1].get_text(strip=True)
-            points = tds[2].get_text(strip=True)
-            location = tds[3].get_text(strip=True)
-            try:
-                points_val = float(points.replace(",", ""))
-            except:
-                points_val = 0
-
-            if points_val > 0:
-                results.append({
-                    "Country": COUNTRY_CODES.get(country_code, country_code),
-                    "Region": state_code,
-                    "Event": event_name,
+        rows = table.find_all("tr")[1:]  # skip header row
+        data = []
+        for row in rows:
+            cols = [col.text.strip() for col in row.find_all("td")]
+            if len(cols) == 4 and all(cols):  # Avoid blank rows
+                place, name, points, location = cols
+                data.append({
                     "Place": place,
                     "Name": name,
-                    "Points": points_val,
+                    "Points": int(points),
                     "Location": location,
+                    "Region": region
                 })
-                debug_logs.append(f" - Competitor: {name}, Points: {points_val}")
 
-    df = pd.DataFrame(results)
-    return df, debug_logs
+        if data:
+            if event_type not in all_results:
+                all_results[event_type] = []
+            all_results[event_type].extend(data)
 
-st.title("ATA Standings — Women 50–59, 1st Degree Black Belt (W01D)")
+    return all_results
 
-region_options = ["All"] + [f"{country_code}-{code}" for country_code, code in REGIONS]
-selected_region = st.selectbox("Select State/Province (or All):", region_options)
+# --- Streamlit App ---
+st.title("ATA Tournament Standings by Region")
 
-if st.button("Fetch Standings"):
-    if selected_region == "All":
-        all_dfs = []
-        all_logs = []
-        progress = st.progress(0)
-        total = len(REGIONS)
-        for i, (country_code, state_code) in enumerate(REGIONS, 1):
-            st.write(f"Fetching {country_code}-{state_code}...")
-            df_region, logs = scrape_region_standings(country_code, state_code)
-            all_dfs.append(df_region)
-            all_logs.extend(logs)
-            progress.progress(i / total)
-        combined_df = pd.concat(all_dfs, ignore_index=True)
-        df = combined_df
-        logs = all_logs
+selected_region = st.selectbox("Select a state or province", REGIONS)
 
-        st.subheader("Debug Logs")
-        for log in logs:
-            st.text(log)
+results_by_event = {}
 
-        if df.empty:
-            st.info("No competitors with points found.")
-        else:
-            st.subheader("All Competitors Combined by Event")
+if selected_region == "All":
+    for region in REGIONS[1:]:  # Skip "All"
+        region_data = fetch_standings(region)
+        for event, competitors in region_data.items():
+            if event not in results_by_event:
+                results_by_event[event] = []
+            results_by_event[event].extend(competitors)
+else:
+    results_by_event = fetch_standings(selected_region)
 
-            for event in sorted(df["Event"].unique()):
-                st.markdown(f"### {event}")
-                event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
-                event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
-                display_cols = ["Rank", "Country", "Region", "Place", "Name", "Points", "Location"]
-                st.dataframe(event_df[display_cols], height=600)
-
-    else:
-        country_code, state_code = selected_region.split("-")
-        df, logs = scrape_region_standings(country_code, state_code)
-
-        st.subheader("Debug Logs")
-        for log in logs:
-            st.text(log)
-
-        if df.empty:
-            st.info("No competitors with points found.")
-        else:
-            st.subheader("Competitor Standings")
-
-            for event in sorted(df["Event"].unique()):
-                st.markdown(f"### {event}")
-                event_df = df[df["Event"] == event].sort_values(by="Points", ascending=False).reset_index(drop=True)
-                event_df["Rank"] = event_df["Points"].rank(method="min", ascending=False).astype(int)
-                display_cols = ["Rank", "Place", "Name", "Points", "Location"]
-                st.dataframe(event_df[display_cols], height=600)
+if not results_by_event:
+    st.info("No standings available for the selected region.")
+else:
+    for event_name, competitors in sorted(results_by_event.items()):
+        if not competitors:
+            continue
+        df = pd.DataFrame(competitors)
+        df = df.sort_values(by="Points", ascending=False).reset_index(drop=True)
+        st.subheader(f"{event_name} ({len(df)} competitors)")
+        st.dataframe(df, use_container_width=True)
