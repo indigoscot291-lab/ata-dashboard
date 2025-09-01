@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 # Configuration
 # --------------------------
 
-# Google Sheet CSV export URL
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv&id=1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg&gid=0"
 
 BASE_URL = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state}&code=W01D"
@@ -45,7 +44,6 @@ def parse_event_tables(soup):
     headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table", class_="table")
     for header, table in zip(headers, tables):
-        # First li is event name
         event_li = header.find("li")
         if event_li:
             event_name = event_li.get_text(strip=True)
@@ -109,7 +107,6 @@ def get_competitor_event_details(name, event):
 
 st.title("ATA Standings - Women 50-59 1st Degree Black Belt")
 
-# Filters
 state_options = ["All", "International"] + ALL_REGIONS
 selected_state = st.selectbox("Select State/Province or International", state_options)
 event_options = ["All"] + EVENT_ORDER
@@ -152,13 +149,14 @@ if go:
         for event in EVENT_ORDER:
             if selected_event != "All" and event != selected_event:
                 continue
-            event_rows = df[df["Event"].str.contains(event)]
+            event_rows = df[df["Event"] == event]  # exact match
             if not event_rows.empty:
                 st.subheader(event)
                 for idx, row in event_rows.iterrows():
                     cols = st.columns([1,3,1,2])
                     cols[0].write(row["Rank"])
-                    if cols[1].button(row["Name"], key=f"{event}-{row['Name']}-{idx}"):
+                    button_key = f"{event}-{row['Name']}-{idx}"  # unique key
+                    if cols[1].button(row["Name"], key=button_key):
                         st.session_state["selected_name"] = row["Name"]
                         st.session_state["selected_event"] = event
                     cols[2].write(row["Points"])
@@ -167,13 +165,12 @@ if go:
 # --------------------------
 # Popup for competitor
 # --------------------------
-if "selected_name" in st.session_state:
+if "selected_name" in st.session_state and "selected_event" in st.session_state:
     name = st.session_state["selected_name"]
-    event = st.session_state.get("selected_event", None)
-    with st.container():
-        st.markdown(f"<h4>🏆 Tournament details for {name} - {event}</h4>", unsafe_allow_html=True)
-        details = get_competitor_event_details(name, event)
-        if not details.empty:
-            st.table(details)
-        else:
-            st.info("No tournament points for this competitor in this event.")
+    event = st.session_state["selected_event"]
+    st.markdown(f"### 🏆 Tournament details for {name} - {event}")
+    details = get_competitor_event_details(name, event)
+    if not details.empty:
+        st.table(details)
+    else:
+        st.info("No tournament points for this competitor in this event.")
