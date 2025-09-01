@@ -3,14 +3,13 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-# --- Google Sheet setup ---
+# --- Google Sheet ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv&id=1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg&gid=0"
 
 @st.cache_data
 def load_tournament_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
-    # Standardize names for matching
     df["Name"] = df["Name"].str.upper().str.strip()
     df["Event"] = df["Event"].str.strip() if "Event" in df.columns else None
     return df
@@ -21,17 +20,16 @@ tournament_data = load_tournament_data()
 BASE_URL = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state}&code=W01D"
 WORLDS_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-US_STATES = [
-    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY",
+US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY",
     "LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND",
-    "OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
-]
+    "OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"]
 
-CA_PROVINCES = [
-    "AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"
-]
+CA_PROVINCES = ["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"]
 
 ALL_REGIONS = US_STATES + CA_PROVINCES
+
+EVENT_ORDER = ["Forms", "Weapons", "Combat Weapons", "Sparring",
+               "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"]
 
 def parse_event_tables(soup):
     results = []
@@ -55,25 +53,30 @@ def parse_event_tables(soup):
 def fetch_state_data(state_abbr):
     country = "US" if state_abbr in US_STATES else "CA"
     url = BASE_URL.format(country=country, state=state_abbr)
-    r = requests.get(url)
-    if r.status_code != 200:
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        return parse_event_tables(soup)
+    except:
         return []
-    soup = BeautifulSoup(r.text, "html.parser")
-    return parse_event_tables(soup)
 
 @st.cache_data
 def fetch_world_data():
-    r = requests.get(WORLDS_URL)
-    if r.status_code != 200:
+    try:
+        r = requests.get(WORLDS_URL)
+        if r.status_code != 200:
+            return []
+        soup = BeautifulSoup(r.text, "html.parser")
+        return parse_event_tables(soup)
+    except:
         return []
-    soup = BeautifulSoup(r.text, "html.parser")
-    return parse_event_tables(soup)
 
 def is_international(location):
-    """True if location does not end with a 2-letter US/CA state/province code"""
     return not any(location.endswith(f", {abbr}") for abbr in ALL_REGIONS)
 
-# --- Streamlit App ---
+# --- Streamlit UI ---
 st.title("ATA Standings - Women 50-59 1st Degree Black Belt")
 
 options = ["All", "International"] + ALL_REGIONS
@@ -108,22 +111,23 @@ if go:
         df = pd.DataFrame(all_results)
         df = df.dropna(subset=["Points"])
         df["Points"] = df["Points"].astype(int)
-        df = df.sort_values(["Event", "Points"], ascending=[True, False])
         df["Rank"] = df.groupby("Event").cumcount() + 1
 
-        # Display each event separately
-        for event, group in df.groupby("Event"):
-            st.subheader(event)
-            for _, row in group.iterrows():
-                cols = st.columns([1, 3, 1, 2])
-                cols[0].write(row["Rank"])
-                if cols[1].button(row["Name"], key=f"{event}-{row['Name']}"):
-                    st.session_state["selected_name"] = row["Name"]
-                    st.session_state["selected_event"] = event
-                cols[2].write(row["Points"])
-                cols[3].write(row["Location"])
+        # Display events in ATA page order
+        for event in EVENT_ORDER:
+            event_rows = df[df["Event"].str.contains(event)]
+            if not event_rows.empty:
+                st.subheader(event)
+                for _, row in event_rows.iterrows():
+                    cols = st.columns([1,3,1,2])
+                    cols[0].write(row["Rank"])
+                    if cols[1].button(row["Name"], key=f"{event}-{row['Name']}"):
+                        st.session_state["selected_name"] = row["Name"]
+                        st.session_state["selected_event"] = event
+                    cols[2].write(row["Points"])
+                    cols[3].write(row["Location"])
 
-# --- Floating Popup for Tournament Details ---
+# --- Floating Popup ---
 if "selected_name" in st.session_state:
     name = st.session_state["selected_name"]
     selected_event = st.session_state.get("selected_event", None)
@@ -147,7 +151,6 @@ if "selected_name" in st.session_state:
             unsafe_allow_html=True
         )
 
-        # Filter Google Sheet by name and event
         details = tournament_data[
             (tournament_data["Name"].str.upper().str.strip() == name.upper().strip())
         ]
