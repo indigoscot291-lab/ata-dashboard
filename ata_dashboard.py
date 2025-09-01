@@ -110,7 +110,7 @@ def gather_data(selected):
 
     elif selected == "All":
         any_data = False
-        for i, region in enumerate(REGION_CODES, start=1):
+        for region in REGION_CODES:
             country, code = REGION_CODES[region]
             url = STATE_URL_TEMPLATE.format(country, code)
             html = fetch_html(url)
@@ -151,63 +151,16 @@ def dedupe_and_rank(event_data):
         clean[ev] = unique
     return clean
 
-# --- Display function with clickable names ---
-def show_results(data, sheet_df):
-    for ev in EVENT_NAMES:
-        rows = data.get(ev, [])
-        if rows:
-            st.subheader(ev)
-            for row in rows:
-                name_display = row["Name"]
-                btn_key = f"{ev}-{name_display}-{row['Location']}"
-                
-                if st.button(name_display, key=btn_key):
-                    matches = sheet_df[sheet_df['Name'].str.lower() == name_display.lower()]
-                    matches = matches[matches[ev] > 0]
-                    if not matches.empty:
-                        st.write(f"**Tournament points for {name_display} in {ev}:**")
-                        st.dataframe(matches[['Date', 'Tournament', ev]])
-                    else:
-                        st.info(f"No {ev} points found for {name_display}.")
-                
-                # Display rest of the row
-                st.write(f"Rank: {row['Rank']} | Points: {row['Points']} | Location: {row['Location']}")
-
 # --- Streamlit UI ---
-st.title("ATA W01D Standings (50-59 Women, 1st Degree)")
-
-# Load Google Sheet (must be public)
-sheet_url = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
-sheet_df = pd.read_csv(sheet_url)
+st.title("ATA W01D Standings (with International Fill-ins)")
 
 selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        if selection == "All":
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            combined = {ev: [] for ev in EVENT_NAMES}
-            total_states = len(REGION_CODES)
-            for i, region in enumerate(REGION_CODES, start=1):
-                status_text.text(f"Loading {region} ({i}/{total_states})...")
-                country, code = REGION_CODES[region]
-                url = STATE_URL_TEMPLATE.format(country, code)
-                html = fetch_html(url)
-                if html:
-                    data = parse_standings(html)
-                    for ev, entries in data.items():
-                        combined[ev].extend(entries)
-                progress_bar.progress(i / total_states)
-            raw = combined
-            data = dedupe_and_rank(raw)
-            has_results = any(len(lst) > 0 for lst in data.values())
-            status_text.empty()
-            progress_bar.empty()
-        else:
-            raw, has_results = gather_data(selection)
-            data = dedupe_and_rank(raw)
+        raw, has_results = gather_data(selection)
+        data = dedupe_and_rank(raw)
 
     if not has_results:
         if selection in REGION_CODES:
@@ -217,6 +170,11 @@ if go:
         else:
             st.warning("No standings data found for this selection.")
     else:
-        show_results(data, sheet_df)
+        for ev in EVENT_NAMES:
+            rows = data.get(ev, [])
+            if rows:
+                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
+                st.subheader(ev)
+                st.dataframe(df, use_container_width=True)
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
