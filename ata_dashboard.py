@@ -41,24 +41,22 @@ tournament_data = load_tournament_data()
 
 def parse_event_tables(soup):
     results = []
-    for ul in soup.find_all("ul", class_="tournament-header"):
+    # Exact class for event headers
+    for ul in soup.find_all("ul", class_="col-12 text-center tournament-header m-0 mt-4"):
         table_div = ul.find_next_sibling("div", class_="table-responsive")
         if not table_div:
             continue
         table_elem = table_div.find("table")
         if not table_elem:
             continue
-        event_li = ul.find("li")
-        if not event_li:
-            continue
-        event_name = event_li.get_text(strip=True)
+        event_name = ul.find("li").get_text(strip=True)
         for row in table_elem.select("tbody tr"):
             cols = [c.get_text(strip=True) for c in row.find_all("td")]
-            if len(cols) >= 4:
+            if len(cols) >= 4 and cols[2].isdigit() and int(cols[2]) > 0:
                 results.append({
                     "Name": cols[1].strip().upper(),
                     "Location": cols[3],
-                    "Points": int(cols[2]) if cols[2].isdigit() else 0,
+                    "Points": int(cols[2]),
                     "Event": event_name
                 })
     return results
@@ -126,7 +124,7 @@ if go:
             if rows:
                 all_results.extend(rows)
         world_rows = fetch_world_data()
-        intl_rows = [r for r in world_rows if is_international(r["Location"])]
+        intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in [x["Name"] for x in all_results]]
         all_results.extend(intl_rows)
 
     elif selected_state == "International":
@@ -158,7 +156,7 @@ if go:
                 for idx, row in event_rows.iterrows():
                     cols = st.columns([1,3,1,2])
                     cols[0].write(row["Rank"])
-                    button_key = f"{event}-{row['Name']}-{idx}"  # unique key
+                    button_key = f"{selected_state}-{event}-{row['Name']}-{idx}"  # fully unique key
                     if cols[1].button(row["Name"], key=button_key):
                         st.session_state["selected_name"] = row["Name"]
                         st.session_state["selected_event"] = event
