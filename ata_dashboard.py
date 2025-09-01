@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
-# ------------------- Constants -------------------
+# --- Constants ---
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
@@ -41,18 +41,7 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-# ------------------- Google Sheet -------------------
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
-@st.cache_data(ttl=3600)
-def fetch_google_sheet():
-    try:
-        return pd.read_csv(SHEET_URL)
-    except:
-        return pd.DataFrame()
-
-sheet_df = fetch_google_sheet()
-
-# ------------------- Fetch HTML -------------------
+# --- Helper Functions ---
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -63,7 +52,6 @@ def fetch_html(url):
         pass
     return None
 
-# ------------------- Parse Standings -------------------
 def parse_standings(html):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
@@ -97,18 +85,17 @@ def parse_standings(html):
                     })
     return data
 
-# ------------------- Gather Data -------------------
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings for International
+    # Always include world standings to handle international entries
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # Add state/province results if selected
+    # Add state/province results if applicable
     if selected not in ["All", "International"]:
         country, code = REGION_CODES[selected]
         url = STATE_URL_TEMPLATE.format(country, code)
@@ -123,7 +110,7 @@ def gather_data(selected):
 
     elif selected == "All":
         any_data = False
-        for region in REGION_CODES:
+        for i, region in enumerate(REGION_CODES, start=1):
             country, code = REGION_CODES[region]
             url = STATE_URL_TEMPLATE.format(country, code)
             html = fetch_html(url)
@@ -135,7 +122,8 @@ def gather_data(selected):
                     any_data = True
         return combined, any_data
 
-    elif selected == "International":
+    # For "International", filter combined to only those missing US/CA code
+    if selected == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
@@ -147,7 +135,6 @@ def gather_data(selected):
 
     return combined, False
 
-# ------------------- Deduplicate & Rank -------------------
 def dedupe_and_rank(event_data):
     clean = {}
     for ev, entries in event_data.items():
@@ -164,47 +151,63 @@ def dedupe_and_rank(event_data):
         clean[ev] = unique
     return clean
 
-# ------------------- Show Results -------------------
+# --- Display function with clickable names ---
 def show_results(data, sheet_df):
     for ev in EVENT_NAMES:
         rows = data.get(ev, [])
-        if not rows:
-            continue
+        if rows:
+            st.subheader(ev)
+            for row in rows:
+                name_display = row["Name"]
+                btn_key = f"{ev}-{name_display}-{row['Location']}"
+                
+                if st.button(name_display, key=btn_key):
+                    matches = sheet_df[sheet_df['Name'].str.lower() == name_display.lower()]
+                    matches = matches[matches[ev] > 0]
+                    if not matches.empty:
+                        st.write(f"**Tournament points for {name_display} in {ev}:**")
+                        st.dataframe(matches[['Date', 'Tournament', ev]])
+                    else:
+                        st.info(f"No {ev} points found for {name_display}.")
+                
+                # Display rest of the row
+                st.write(f"Rank: {row['Rank']} | Points: {row['Points']} | Location: {row['Location']}")
 
-        st.subheader(ev)
+# --- Streamlit UI ---
+st.title("ATA W01D Standings (50-59 Women, 1st Degree)")
 
-        for idx, row in enumerate(rows):
-            cols = st.columns([1, 4, 1, 2])
-            cols[0].write(row["Rank"])
-            
-            # clickable name
-            name_lower = row["Name"].lower()
-            button_key = f"{ev}-{row['Name']}-{idx}"
-            if cols[1].button(row["Name"], key=button_key):
-                # filter google sheet case-insensitive
-                matches = sheet_df[sheet_df["Name"].str.lower() == name_lower]
-                matches = matches[matches[ev] > 0]  # only show if points > 0
-                if not matches.empty:
-                    info_str = ""
-                    for _, m in matches.iterrows():
-                        info_str += f"{m['Date']} | {m['Tournament']} | {ev}: {m[ev]}\n"
-                    st.info(info_str)
-                else:
-                    st.info(f"No {ev} points found for {row['Name']}.")
-                    
-            cols[2].write(row["Points"])
-            cols[3].write(row["Location"])
-
-# ------------------- Streamlit UI -------------------
-st.title("ATA W01D Standings (50-59 Women, 1st Degree Black Belt)")
+# Load Google Sheet (must be public)
+sheet_url = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+sheet_df = pd.read_csv(sheet_url)
 
 selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        raw, has_results = gather_data(selection)
-        data = dedupe_and_rank(raw)
+        if selection == "All":
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            combined = {ev: [] for ev in EVENT_NAMES}
+            total_states = len(REGION_CODES)
+            for i, region in enumerate(REGION_CODES, start=1):
+                status_text.text(f"Loading {region} ({i}/{total_states})...")
+                country, code = REGION_CODES[region]
+                url = STATE_URL_TEMPLATE.format(country, code)
+                html = fetch_html(url)
+                if html:
+                    data = parse_standings(html)
+                    for ev, entries in data.items():
+                        combined[ev].extend(entries)
+                progress_bar.progress(i / total_states)
+            raw = combined
+            data = dedupe_and_rank(raw)
+            has_results = any(len(lst) > 0 for lst in data.values())
+            status_text.empty()
+            progress_bar.empty()
+        else:
+            raw, has_results = gather_data(selection)
+            data = dedupe_and_rank(raw)
 
     if not has_results:
         if selection in REGION_CODES:
