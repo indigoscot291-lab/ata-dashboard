@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import time
 
 # --------------------------
-# Configuration
+# Config
 # --------------------------
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv&id=1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg&gid=0"
 
@@ -38,24 +39,29 @@ tournament_data = load_tournament_data()
 # --------------------------
 def parse_event_tables(soup):
     results = []
-    for ul in soup.find_all("ul"):
-        li_texts = [li.get_text(strip=True) for li in ul.find_all("li")]
-        event_name = next((e for e in EVENT_ORDER if e in li_texts), None)
-        if not event_name:
+    for ul in soup.find_all("ul", class_="tournament-header"):
+        first_li = ul.find("li")
+        if not first_li:
+            continue
+        span = first_li.find("span")
+        if not span:
+            continue
+        event_name = span.get_text(strip=True)
+        if event_name not in EVENT_ORDER:
             continue
         table_div = ul.find_next_sibling("div", class_="table-responsive")
         if not table_div:
             continue
-        table_elem = table_div.find("table")
-        if not table_elem:
+        table = table_div.find("table")
+        if not table:
             continue
-        for row in table_elem.select("tbody tr"):
-            cols = [c.get_text(strip=True) for c in row.find_all("td")]
+        for tr in table.select("tbody tr"):
+            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
             if len(cols) >= 4 and cols[2].isdigit() and int(cols[2]) > 0:
                 results.append({
                     "Name": cols[1].strip().upper(),
-                    "Location": cols[3],
                     "Points": int(cols[2]),
+                    "Location": cols[3].strip(),
                     "Event": event_name
                 })
     return results
@@ -113,36 +119,46 @@ name_filter = st.text_input("Filter by Name (optional)")
 go = st.button("Go")
 
 # Clear previous selection if state/event changed
-if "selected_name" in st.session_state:
-    st.session_state.pop("selected_name", None)
-if "selected_event" in st.session_state:
-    st.session_state.pop("selected_event", None)
-if "selected_state" in st.session_state:
-    st.session_state.pop("selected_state", None)
+for key in ["selected_name", "selected_event", "selected_state"]:
+    if key in st.session_state:
+        st.session_state.pop(key)
 
 if go:
     all_results = []
+    regions_to_fetch = []
 
     if selected_state == "All":
-        for region in ALL_REGIONS:
+        regions_to_fetch = ALL_REGIONS
+        world_rows = fetch_world_data()
+    elif selected_state == "International":
+        world_rows = fetch_world_data()
+    else:
+        regions_to_fetch = [selected_state]
+
+    total_regions = len(regions_to_fetch)
+    if total_regions > 0:
+        st.write("Fetching state/province results...")
+        progress_bar = st.progress(0)
+        start_time = time.time()
+        for i, region in enumerate(regions_to_fetch, start=1):
             rows = fetch_state_data(region)
             if rows:
                 all_results.extend(rows)
-        world_rows = fetch_world_data()
-        existing_names = {r["Name"] for r in all_results}
-        intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in existing_names]
-        all_results.extend(intl_rows)
-
+            # Update progress
+            progress = i / total_regions
+            progress_bar.progress(progress)
+            elapsed = time.time() - start_time
+            remaining = (elapsed / i) * (total_regions - i)
+            st.write(f"Processed {i}/{total_regions} ({progress*100:.1f}%), estimated time remaining: {remaining:.1f}s")
+        # Add international rows for All
+        if selected_state == "All":
+            existing_names = {r["Name"] for r in all_results}
+            intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in existing_names]
+            all_results.extend(intl_rows)
     elif selected_state == "International":
-        world_rows = fetch_world_data()
-        intl_rows = [r for r in world_rows if is_international(r["Location"])]
-        all_results.extend(intl_rows)
+        all_results.extend([r for r in world_rows if is_international(r["Location"])])
 
-    else:
-        rows = fetch_state_data(selected_state)
-        if rows:
-            all_results.extend(rows)
-
+    # Display results
     if not all_results:
         st.write(f"There are no 50-59 1st Degree Women for {selected_state}")
     else:
