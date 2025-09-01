@@ -11,7 +11,6 @@ def load_tournament_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
     df["Name"] = df["Name"].str.upper().str.strip()
-    df["Event"] = df["Event"].str.strip() if "Event" in df.columns else None
     return df
 
 tournament_data = load_tournament_data()
@@ -31,12 +30,19 @@ ALL_REGIONS = US_STATES + CA_PROVINCES
 EVENT_ORDER = ["Forms", "Weapons", "Combat Weapons", "Sparring",
                "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"]
 
+# --- Functions ---
+
 def parse_event_tables(soup):
     results = []
     headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table", class_="table")
     for header, table in zip(headers, tables):
-        event_name = " | ".join(li.get_text(strip=True) for li in header.find_all("li"))
+        # First li is event name
+        event_li = header.find("li")
+        if event_li:
+            event_name = event_li.get_text(strip=True)
+        else:
+            continue
         for row in table.select("tbody tr"):
             cols = [c.get_text(strip=True) for c in row.find_all("td")]
             if len(cols) >= 4:
@@ -75,6 +81,16 @@ def fetch_world_data():
 
 def is_international(location):
     return not any(location.endswith(f", {abbr}") for abbr in ALL_REGIONS)
+
+def get_competitor_event_details(name, event):
+    lookup_name = name.strip().upper()
+    competitor_rows = tournament_data[tournament_data["Name"] == lookup_name]
+    if competitor_rows.empty or event not in tournament_data.columns:
+        return pd.DataFrame()
+    result_df = competitor_rows[["Date", "Tournament", event]].copy()
+    result_df = result_df.rename(columns={event: "Points"})
+    result_df = result_df[result_df["Points"] > 0]
+    return result_df
 
 # --- Streamlit UI ---
 st.title("ATA Standings - Women 50-59 1st Degree Black Belt")
@@ -118,10 +134,10 @@ if go:
             event_rows = df[df["Event"].str.contains(event)]
             if not event_rows.empty:
                 st.subheader(event)
-                for _, row in event_rows.iterrows():
+                for idx, row in event_rows.iterrows():
                     cols = st.columns([1,3,1,2])
                     cols[0].write(row["Rank"])
-                    if cols[1].button(row["Name"], key=f"{event}-{row['Name']}"):
+                    if cols[1].button(row["Name"], key=f"{event}-{row['Name']}-{idx}"):
                         st.session_state["selected_name"] = row["Name"]
                         st.session_state["selected_event"] = event
                     cols[2].write(row["Points"])
@@ -151,13 +167,12 @@ if "selected_name" in st.session_state:
             unsafe_allow_html=True
         )
 
-        details = tournament_data[
-            (tournament_data["Name"].str.upper().str.strip() == name.upper().strip())
-        ]
-        if selected_event and "Event" in details.columns:
-            details = details[details["Event"].str.strip() == selected_event]
+        if selected_event:
+            details = get_competitor_event_details(name, selected_event)
+        else:
+            details = tournament_data[tournament_data["Name"].str.upper().str.strip() == name.upper().strip()]
 
         if not details.empty:
-            st.table(details[["Date", "Tournament", "Points"]])
+            st.table(details)
         else:
             st.info("No tournament details found for this competitor.")
