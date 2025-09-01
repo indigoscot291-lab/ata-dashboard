@@ -4,9 +4,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
-# --- Constants ---
+# --- CONFIG ---
 EVENT_NAMES = [
-    "Forms", "Weapons", "Combat Weapons", "Sparring",
+    "Forms", "Weapons", "Combat", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
@@ -41,14 +41,10 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-# --- Google Sheet example ---
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
-sheet_df = pd.read_csv(GOOGLE_SHEET_URL)
-# Convert event columns to numeric
-for ev in EVENT_NAMES:
-    sheet_df[ev] = pd.to_numeric(sheet_df[ev], errors='coerce').fillna(0)
+# Google Sheet CSV export
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
-# --- Functions ---
+# --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -58,6 +54,17 @@ def fetch_html(url):
     except:
         pass
     return None
+
+@st.cache_data(ttl=3600)
+def fetch_sheet():
+    try:
+        df = pd.read_csv(SHEET_URL)
+        for ev in EVENT_NAMES:
+            if ev in df.columns:
+                df[ev] = pd.to_numeric(df[ev], errors='coerce').fillna(0)
+        return df
+    except:
+        return pd.DataFrame()
 
 def parse_standings(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -74,7 +81,6 @@ def parse_standings(html):
         tbody = table.find("tbody")
         if not tbody:
             continue
-
         for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
             if len(cols) == 4 and all(cols):
@@ -95,14 +101,13 @@ def parse_standings(html):
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings for international entries
+    # Always include world standings for international
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # Add state/province results if applicable
     if selected not in ["All", "International"]:
         country, code = REGION_CODES[selected]
         url = STATE_URL_TEMPLATE.format(country, code)
@@ -110,7 +115,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev].extend(entries)
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -157,8 +162,10 @@ def dedupe_and_rank(event_data):
         clean[ev] = unique
     return clean
 
-# --- Streamlit UI ---
-st.title("ATA W01D Standings (with International Fill-ins)")
+# --- STREAMLIT APP ---
+st.title("ATA W01D Standings")
+
+sheet_df = fetch_sheet()
 
 selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
@@ -179,25 +186,18 @@ if go:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
+                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
                 st.subheader(ev)
-                # Build DataFrame for display (without clickable buttons)
-                display_rows = []
-                for r in rows:
-                    display_rows.append({
-                        "Rank": r["Rank"],
-                        "Name": r["Name"],  # Will use expander for clickable name
-                        "Points": r["Points"],
-                        "Location": r["Location"]
-                    })
-                df = pd.DataFrame(display_rows)
-
-                for idx, row in df.iterrows():
-                    with st.expander(f"{row['Name']} ({row['Points']} pts)"):
-                        # Filter Google Sheet for this competitor & event
+                for _, row in df.iterrows():
+                    with st.expander(f"{row['Rank']}. {row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                        # Filter Google Sheet for this competitor and this event
                         comp_data = sheet_df[
-                            (sheet_df["Name"].str.lower() == row["Name"].lower()) &
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
                         ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
-                        st.dataframe(comp_data, use_container_width=True)
+                        if not comp_data.empty:
+                            st.dataframe(comp_data, use_container_width=True)
+                        else:
+                            st.write("No tournament data for this event.")
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
