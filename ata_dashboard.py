@@ -1,200 +1,179 @@
 import streamlit as st
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import time
+import pandas as pd
+import re
 
-# --------------------------
-# Config
-# --------------------------
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv&id=1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg&gid=0"
+# Constants
+EVENT_NAMES = [
+    "Forms", "Weapons", "Combat Weapons", "Sparring",
+    "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
+]
 
-BASE_URL = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state}&code=W01D"
-WORLDS_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
+REGION_CODES = {
+    # US states
+    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
+    "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
+    "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
+    "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
+    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"),
+    "Kansas": ("US", "KS"), "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"),
+    "Maine": ("US", "ME"), "Maryland": ("US", "MD"), "Massachusetts": ("US", "MA"),
+    "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
+    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"),
+    "Nevada": ("US", "NV"), "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"),
+    "New Mexico": ("US", "NM"), "New York": ("US", "NY"), "North Carolina": ("US", "NC"),
+    "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
+    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"),
+    "South Carolina": ("US", "SC"), "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"),
+    "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
+    "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
+    "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
+    # Canadian provinces
+    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
+    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
+    "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
+    "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
+}
 
-US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY",
-    "LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND",
-    "OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"]
+REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
-CA_PROVINCES = ["AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"]
+STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
+WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-ALL_REGIONS = US_STATES + CA_PROVINCES
-EVENT_ORDER = ["Forms", "Weapons", "Combat Weapons", "Sparring",
-               "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"]
+@st.cache_data(ttl=3600)
+def fetch_html(url):
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            return r.text
+    except:
+        pass
+    return None
 
-# --------------------------
-# Load Google Sheet
-# --------------------------
-@st.cache_data
-def load_tournament_data():
-    df = pd.read_csv(SHEET_URL)
-    df.columns = df.columns.str.strip()
-    df["Name"] = df["Name"].str.strip().str.upper()
-    return df
-
-tournament_data = load_tournament_data()
-
-# --------------------------
-# Scraping Functions
-# --------------------------
-def parse_event_tables(soup):
-    results = []
-    for ul in soup.find_all("ul", class_="tournament-header"):
-        first_li = ul.find("li")
-        if not first_li:
+def parse_standings(html):
+    soup = BeautifulSoup(html, "html.parser")
+    data = {ev: [] for ev in EVENT_NAMES}
+    headers = soup.find_all("ul", class_="tournament-header")
+    tables = soup.find_all("table")
+    for header, table in zip(headers, tables):
+        evt = header.find("span", class_="text-primary text-uppercase")
+        if not evt:
             continue
-        span = first_li.find("span")
-        if not span:
+        ev_name = evt.get_text(strip=True)
+        if ev_name not in EVENT_NAMES:
             continue
-        event_name = span.get_text(strip=True)
-        if event_name not in EVENT_ORDER:
+        tbody = table.find("tbody")
+        if not tbody:
             continue
-        table_div = ul.find_next_sibling("div", class_="table-responsive")
-        if not table_div:
-            continue
-        table = table_div.find("table")
-        if not table:
-            continue
-        for tr in table.select("tbody tr"):
+
+        for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
-            if len(cols) >= 4 and cols[2].isdigit() and int(cols[2]) > 0:
-                results.append({
-                    "Name": cols[1].strip().upper(),
-                    "Points": int(cols[2]),
-                    "Location": cols[3].strip(),
-                    "Event": event_name
-                })
-    return results
+            if len(cols) == 4 and all(cols):
+                rank, name, pts, loc = cols
+                try:
+                    pts_val = int(pts)
+                except:
+                    continue
+                if pts_val > 0:
+                    data[ev_name].append({
+                        "Rank": int(rank),
+                        "Name": name.title(),
+                        "Points": pts_val,
+                        "Location": loc
+                    })
+    return data
 
-@st.cache_data
-def fetch_state_data(state_abbr):
-    country = "US" if state_abbr in US_STATES else "CA"
-    url = BASE_URL.format(country=country, state=state_abbr)
-    try:
-        r = requests.get(url)
-        if r.status_code != 200:
-            return []
-        soup = BeautifulSoup(r.text, "html.parser")
-        return parse_event_tables(soup)
-    except:
-        return []
+def gather_data(selected):
+    combined = {ev: [] for ev in EVENT_NAMES}
 
-@st.cache_data
-def fetch_world_data():
-    try:
-        r = requests.get(WORLDS_URL)
-        if r.status_code != 200:
-            return []
-        soup = BeautifulSoup(r.text, "html.parser")
-        return parse_event_tables(soup)
-    except:
-        return []
+    # Always include world standings to handle international entries
+    world_html = fetch_html(WORLD_URL)
+    if world_html:
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
+            combined[ev].extend(entries)
 
-def is_international(location):
-    return not any(location.endswith(f", {abbr}") for abbr in ALL_REGIONS)
+    # Add state/province results if applicable
+    if selected not in ["All", "International"]:
+        country, code = REGION_CODES[selected]
+        url = STATE_URL_TEMPLATE.format(country, code)
+        html = fetch_html(url)
+        if html:
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev].extend(entries)
+            return combined, any(len(lst) > 0 for lst in state_data.values())
+        else:
+            return combined, False
 
-# --------------------------
-# Google Sheet Lookup
-# --------------------------
-def get_competitor_event_details(name, event):
-    lookup_name = name.strip().upper()
-    competitor_rows = tournament_data[tournament_data["Name"] == lookup_name]
-    if competitor_rows.empty or event not in tournament_data.columns:
-        return pd.DataFrame()
-    df_event = competitor_rows[["Date", "Tournament", event]].copy()
-    df_event = df_event.rename(columns={event: "Points"})
-    df_event = df_event[df_event["Points"] > 0]
-    return df_event
+    elif selected == "All":
+        any_data = False
+        for region in REGION_CODES:
+            country, code = REGION_CODES[region]
+            url = STATE_URL_TEMPLATE.format(country, code)
+            html = fetch_html(url)
+            if html:
+                data = parse_standings(html)
+                for ev, entries in data.items():
+                    combined[ev].extend(entries)
+                if any(len(lst) > 0 for lst in data.values()):
+                    any_data = True
+        return combined, any_data
 
-# --------------------------
-# Streamlit UI
-# --------------------------
-st.title("ATA Standings - Women 50-59 1st Degree Black Belt")
+    # For "International", we overwrite combined with only those missing a U.S./CA code
+    if selected == "International":
+        intl = {ev: [] for ev in EVENT_NAMES}
+        for ev, entries in combined.items():
+            for e in entries:
+                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                    intl[ev].append(e)
+        combined = intl
+        has_any = any(len(lst) > 0 for lst in combined.values())
+        return combined, has_any
 
-state_options = ["All", "International"] + ALL_REGIONS
-selected_state = st.selectbox("Select State/Province or International", state_options)
-event_options = ["All"] + EVENT_ORDER
-selected_event = st.selectbox("Select Event", event_options)
-name_filter = st.text_input("Filter by Name (optional)")
+    return combined, False
+
+def dedupe_and_rank(event_data):
+    clean = {}
+    for ev, entries in event_data.items():
+        seen = set()
+        unique = []
+        for e in entries:
+            key = (e["Name"], e["Location"], e["Points"])
+            if key not in seen:
+                seen.add(key)
+                unique.append(e)
+        unique.sort(key=lambda x: x["Points"], reverse=True)
+        for idx, row in enumerate(unique, start=1):
+            row["Rank"] = idx
+        clean[ev] = unique
+    return clean
+
+# --- Streamlit UI ---
+st.title("ATA W01D Standings (with International Fill-ins)")
+
+selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
-# Clear previous selection if state/event changed
-for key in ["selected_name", "selected_event", "selected_state"]:
-    if key in st.session_state:
-        st.session_state.pop(key)
-
 if go:
-    all_results = []
-    regions_to_fetch = []
+    with st.spinner("Loading standings..."):
+        raw, has_results = gather_data(selection)
+        data = dedupe_and_rank(raw)
 
-    if selected_state == "All":
-        regions_to_fetch = ALL_REGIONS
-        world_rows = fetch_world_data()
-    elif selected_state == "International":
-        world_rows = fetch_world_data()
+    if not has_results:
+        if selection in REGION_CODES:
+            st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
+        elif selection == "International":
+            st.warning("There are no 50‑59 1st Degree Women for International.")
+        else:
+            st.warning("No standings data found for this selection.")
     else:
-        regions_to_fetch = [selected_state]
-
-    total_regions = len(regions_to_fetch)
-    if total_regions > 0:
-        st.write("Fetching state/province results...")
-        progress_bar = st.progress(0)
-        start_time = time.time()
-        for i, region in enumerate(regions_to_fetch, start=1):
-            rows = fetch_state_data(region)
+        for ev in EVENT_NAMES:
+            rows = data.get(ev, [])
             if rows:
-                all_results.extend(rows)
-            # Update progress
-            progress = i / total_regions
-            progress_bar.progress(progress)
-            elapsed = time.time() - start_time
-            remaining = (elapsed / i) * (total_regions - i)
-            st.write(f"Processed {i}/{total_regions} ({progress*100:.1f}%), estimated time remaining: {remaining:.1f}s")
-        # Add international rows for All
-        if selected_state == "All":
-            existing_names = {r["Name"] for r in all_results}
-            intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in existing_names]
-            all_results.extend(intl_rows)
-    elif selected_state == "International":
-        all_results.extend([r for r in world_rows if is_international(r["Location"])])
-
-    # Display results
-    if not all_results:
-        st.write(f"There are no 50-59 1st Degree Women for {selected_state}")
-    else:
-        df = pd.DataFrame(all_results)
-        df = df[df["Points"] > 0]
-        if name_filter:
-            df = df[df["Name"].str.contains(name_filter.strip(), case=False)]
-        df["Rank"] = df.groupby("Event").cumcount() + 1
-
-        for event in EVENT_ORDER:
-            if selected_event != "All" and event != selected_event:
-                continue
-            event_rows = df[df["Event"] == event]
-            if not event_rows.empty:
-                st.subheader(event)
-                for idx, row in event_rows.iterrows():
-                    cols = st.columns([1,3,1,2])
-                    cols[0].write(row["Rank"])
-                    state_key = selected_state if selected_state != "International" else "INTL"
-                    button_key = f"{state_key}-{event}-{row['Name']}-{idx}"
-                    if cols[1].button(row["Name"], key=button_key):
-                        st.session_state["selected_name"] = row["Name"]
-                        st.session_state["selected_event"] = event
-                        st.session_state["selected_state"] = state_key
-                    cols[2].write(row["Points"])
-                    cols[3].write(row["Location"])
-
-# --------------------------
-# Popup for competitor
-# --------------------------
-if "selected_name" in st.session_state and "selected_event" in st.session_state:
-    name = st.session_state["selected_name"]
-    event = st.session_state["selected_event"]
-    st.markdown(f"### 🏆 Tournament details for {name} - {event}")
-    details = get_competitor_event_details(name, event)
-    if not details.empty:
-        st.table(details)
-    else:
-        st.info("No tournament points for this competitor in this event.")
+                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
+                st.subheader(ev)
+                st.dataframe(df, use_container_width=True)
+else:
+    st.info("Select a region or 'International' and click Go to view standings.")
