@@ -88,15 +88,8 @@ def parse_standings(html):
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings to handle international entries
-    world_html = fetch_html(WORLD_URL)
-    if world_html:
-        world_data = parse_standings(world_html)
-        for ev, entries in world_data.items():
-            combined[ev].extend(entries)
-
-    # Add state/province results if applicable
     if selected not in ["All", "International"]:
+        # Only fetch this one state/province
         country, code = REGION_CODES[selected]
         url = STATE_URL_TEMPLATE.format(country, code)
         html = fetch_html(url)
@@ -122,16 +115,22 @@ def gather_data(selected):
                     any_data = True
         return combined, any_data
 
-    # For "International", filter combined to only those missing US/CA code
-    if selected == "International":
-        intl = {ev: [] for ev in EVENT_NAMES}
-        for ev, entries in combined.items():
-            for e in entries:
-                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
-                    intl[ev].append(e)
-        combined = intl
-        has_any = any(len(lst) > 0 for lst in combined.values())
-        return combined, has_any
+    elif selected == "International":
+        # Fetch world standings only
+        world_html = fetch_html(WORLD_URL)
+        if world_html:
+            world_data = parse_standings(world_html)
+            # Keep only entries without US/CA state code
+            intl = {ev: [] for ev in EVENT_NAMES}
+            for ev, entries in world_data.items():
+                for e in entries:
+                    if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                        intl[ev].append(e)
+            combined = intl
+            has_any = any(len(lst) > 0 for lst in combined.values())
+            return combined, has_any
+        else:
+            return combined, False
 
     return combined, False
 
