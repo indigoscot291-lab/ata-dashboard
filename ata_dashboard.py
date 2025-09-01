@@ -41,7 +41,14 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-# --- Helper Functions ---
+# --- Google Sheet example ---
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+sheet_df = pd.read_csv(GOOGLE_SHEET_URL)
+# Convert event columns to numeric
+for ev in EVENT_NAMES:
+    sheet_df[ev] = pd.to_numeric(sheet_df[ev], errors='coerce').fillna(0)
+
+# --- Functions ---
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -88,8 +95,15 @@ def parse_standings(html):
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
+    # Always include world standings for international entries
+    world_html = fetch_html(WORLD_URL)
+    if world_html:
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
+            combined[ev].extend(entries)
+
+    # Add state/province results if applicable
     if selected not in ["All", "International"]:
-        # Only fetch this one state/province
         country, code = REGION_CODES[selected]
         url = STATE_URL_TEMPLATE.format(country, code)
         html = fetch_html(url)
@@ -116,21 +130,14 @@ def gather_data(selected):
         return combined, any_data
 
     elif selected == "International":
-        # Fetch world standings only
-        world_html = fetch_html(WORLD_URL)
-        if world_html:
-            world_data = parse_standings(world_html)
-            # Keep only entries without US/CA state code
-            intl = {ev: [] for ev in EVENT_NAMES}
-            for ev, entries in world_data.items():
-                for e in entries:
-                    if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
-                        intl[ev].append(e)
-            combined = intl
-            has_any = any(len(lst) > 0 for lst in combined.values())
-            return combined, has_any
-        else:
-            return combined, False
+        intl = {ev: [] for ev in EVENT_NAMES}
+        for ev, entries in combined.items():
+            for e in entries:
+                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                    intl[ev].append(e)
+        combined = intl
+        has_any = any(len(lst) > 0 for lst in combined.values())
+        return combined, has_any
 
     return combined, False
 
@@ -172,8 +179,25 @@ if go:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
-                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
                 st.subheader(ev)
-                st.dataframe(df, use_container_width=True)
+                # Build DataFrame for display (without clickable buttons)
+                display_rows = []
+                for r in rows:
+                    display_rows.append({
+                        "Rank": r["Rank"],
+                        "Name": r["Name"],  # Will use expander for clickable name
+                        "Points": r["Points"],
+                        "Location": r["Location"]
+                    })
+                df = pd.DataFrame(display_rows)
+
+                for idx, row in df.iterrows():
+                    with st.expander(f"{row['Name']} ({row['Points']} pts)"):
+                        # Filter Google Sheet for this competitor & event
+                        comp_data = sheet_df[
+                            (sheet_df["Name"].str.lower() == row["Name"].lower()) &
+                            (sheet_df[ev] > 0)
+                        ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+                        st.dataframe(comp_data, use_container_width=True)
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
