@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 # --------------------------
 # Configuration
 # --------------------------
-
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv&id=1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg&gid=0"
 
 BASE_URL = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state}&code=W01D"
@@ -25,7 +24,6 @@ EVENT_ORDER = ["Forms", "Weapons", "Combat Weapons", "Sparring",
 # --------------------------
 # Load Google Sheet
 # --------------------------
-
 @st.cache_data
 def load_tournament_data():
     df = pd.read_csv(SHEET_URL)
@@ -38,11 +36,12 @@ tournament_data = load_tournament_data()
 # --------------------------
 # Scraping Functions
 # --------------------------
-
 def parse_event_tables(soup):
     results = []
     for ul in soup.find_all("ul"):
-        if "tournament-header" not in ul.get("class", []):
+        li_texts = [li.get_text(strip=True) for li in ul.find_all("li")]
+        event_name = next((e for e in EVENT_ORDER if e in li_texts), None)
+        if not event_name:
             continue
         table_div = ul.find_next_sibling("div", class_="table-responsive")
         if not table_div:
@@ -50,11 +49,6 @@ def parse_event_tables(soup):
         table_elem = table_div.find("table")
         if not table_elem:
             continue
-        # First li is event name
-        event_li = ul.find("li")
-        if not event_li:
-            continue
-        event_name = event_li.get_text(strip=True)
         for row in table_elem.select("tbody tr"):
             cols = [c.get_text(strip=True) for c in row.find_all("td")]
             if len(cols) >= 4 and cols[2].isdigit() and int(cols[2]) > 0:
@@ -96,7 +90,6 @@ def is_international(location):
 # --------------------------
 # Google Sheet Lookup
 # --------------------------
-
 def get_competitor_event_details(name, event):
     lookup_name = name.strip().upper()
     competitor_rows = tournament_data[tournament_data["Name"] == lookup_name]
@@ -110,7 +103,6 @@ def get_competitor_event_details(name, event):
 # --------------------------
 # Streamlit UI
 # --------------------------
-
 st.title("ATA Standings - Women 50-59 1st Degree Black Belt")
 
 state_options = ["All", "International"] + ALL_REGIONS
@@ -137,7 +129,6 @@ if go:
             if rows:
                 all_results.extend(rows)
         world_rows = fetch_world_data()
-        # Only add international competitors not already in states
         existing_names = {r["Name"] for r in all_results}
         intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in existing_names]
         all_results.extend(intl_rows)
@@ -161,7 +152,6 @@ if go:
             df = df[df["Name"].str.contains(name_filter.strip(), case=False)]
         df["Rank"] = df.groupby("Event").cumcount() + 1
 
-        # Display by event order
         for event in EVENT_ORDER:
             if selected_event != "All" and event != selected_event:
                 continue
