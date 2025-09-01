@@ -41,6 +41,7 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
+# Cache HTML fetches for efficiency
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -87,15 +88,8 @@ def parse_standings(html):
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings to handle international entries
-    world_html = fetch_html(WORLD_URL)
-    if world_html:
-        world_data = parse_standings(world_html)
-        for ev, entries in world_data.items():
-            combined[ev].extend(entries)
-
-    # Add state/province results if applicable
     if selected not in ["All", "International"]:
+        # Only fetch the state/province HTML
         country, code = REGION_CODES[selected]
         url = STATE_URL_TEMPLATE.format(country, code)
         html = fetch_html(url)
@@ -103,7 +97,8 @@ def gather_data(selected):
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
-            return combined, any(len(lst) > 0 for lst in state_data.values())
+            has_data = any(len(lst) > 0 for lst in state_data.values())
+            return combined, has_data
         else:
             return combined, False
 
@@ -121,16 +116,22 @@ def gather_data(selected):
                     any_data = True
         return combined, any_data
 
-    # For "International", we overwrite combined with only those missing a U.S./CA code
-    if selected == "International":
-        intl = {ev: [] for ev in EVENT_NAMES}
-        for ev, entries in combined.items():
-            for e in entries:
-                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
-                    intl[ev].append(e)
-        combined = intl
-        has_any = any(len(lst) > 0 for lst in combined.values())
-        return combined, has_any
+    elif selected == "International":
+        # Fetch world standings and filter only international entries
+        world_html = fetch_html(WORLD_URL)
+        if world_html:
+            world_data = parse_standings(world_html)
+            intl = {ev: [] for ev in EVENT_NAMES}
+            for ev, entries in world_data.items():
+                for e in entries:
+                    # Only include entries without U.S./Canada code
+                    if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                        intl[ev].append(e)
+            combined = intl
+            has_any = any(len(lst) > 0 for lst in combined.values())
+            return combined, has_any
+        else:
+            return combined, False
 
     return combined, False
 
