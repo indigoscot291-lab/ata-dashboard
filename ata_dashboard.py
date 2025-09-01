@@ -10,23 +10,30 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC
 def load_tournament_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
+    # Standardize names for matching
+    df["Name"] = df["Name"].str.upper().str.strip()
+    df["Event"] = df["Event"].str.strip() if "Event" in df.columns else None
     return df
 
 tournament_data = load_tournament_data()
 
 # --- Scraping setup ---
-BASE_URL = "https://atamartialarts.com/events/tournament-standings/state-standings/?code=W01D&region={}"
+BASE_URL = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state}&code=W01D"
 WORLDS_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-STATES_PROVINCES = [
+US_STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY",
     "LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND",
-    "OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+    "OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
+]
+
+CA_PROVINCES = [
     "AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT"
 ]
 
+ALL_REGIONS = US_STATES + CA_PROVINCES
+
 def parse_event_tables(soup):
-    """Extracts event tables and headers from a state/world standings page."""
     results = []
     headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table", class_="table")
@@ -45,8 +52,9 @@ def parse_event_tables(soup):
     return results
 
 @st.cache_data
-def fetch_state_data(region):
-    url = BASE_URL.format(region)
+def fetch_state_data(state_abbr):
+    country = "US" if state_abbr in US_STATES else "CA"
+    url = BASE_URL.format(country=country, state=state_abbr)
     r = requests.get(url)
     if r.status_code != 200:
         return []
@@ -62,13 +70,13 @@ def fetch_world_data():
     return parse_event_tables(soup)
 
 def is_international(location):
-    """True if location does NOT contain a 2-letter state/province abbreviation."""
-    return not any(location.endswith(f", {abbr}") for abbr in STATES_PROVINCES)
+    """True if location does not end with a 2-letter US/CA state/province code"""
+    return not any(location.endswith(f", {abbr}") for abbr in ALL_REGIONS)
 
 # --- Streamlit App ---
 st.title("ATA Standings - Women 50-59 1st Degree Black Belt")
 
-options = ["All", "International"] + STATES_PROVINCES
+options = ["All", "International"] + ALL_REGIONS
 state_choice = st.selectbox("Select State/Province or International", options)
 go = st.button("Go")
 
@@ -76,7 +84,7 @@ if go:
     all_results = []
 
     if state_choice == "All":
-        for region in STATES_PROVINCES:
+        for region in ALL_REGIONS:
             rows = fetch_state_data(region)
             if rows:
                 all_results.extend(rows)
@@ -103,22 +111,23 @@ if go:
         df = df.sort_values(["Event", "Points"], ascending=[True, False])
         df["Rank"] = df.groupby("Event").cumcount() + 1
 
+        # Display each event separately
         for event, group in df.groupby("Event"):
             st.subheader(event)
-
             for _, row in group.iterrows():
                 cols = st.columns([1, 3, 1, 2])
                 cols[0].write(row["Rank"])
                 if cols[1].button(row["Name"], key=f"{event}-{row['Name']}"):
                     st.session_state["selected_name"] = row["Name"]
+                    st.session_state["selected_event"] = event
                 cols[2].write(row["Points"])
                 cols[3].write(row["Location"])
 
 # --- Floating Popup for Tournament Details ---
 if "selected_name" in st.session_state:
     name = st.session_state["selected_name"]
-    
-    # Container with styling to simulate floating popup
+    selected_event = st.session_state.get("selected_event", None)
+
     with st.container():
         st.markdown(
             f"""
@@ -138,8 +147,13 @@ if "selected_name" in st.session_state:
             unsafe_allow_html=True
         )
 
-        # Filter Google Sheet for that competitor
-        details = tournament_data[tournament_data["Name"].str.upper() == name.upper()]
+        # Filter Google Sheet by name and event
+        details = tournament_data[
+            (tournament_data["Name"].str.upper().str.strip() == name.upper().strip())
+        ]
+        if selected_event and "Event" in details.columns:
+            details = details[details["Event"].str.strip() == selected_event]
+
         if not details.empty:
             st.table(details[["Date", "Tournament", "Points"]])
         else:
