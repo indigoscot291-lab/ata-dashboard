@@ -41,15 +41,20 @@ tournament_data = load_tournament_data()
 
 def parse_event_tables(soup):
     results = []
-    # Exact class for event headers
-    for ul in soup.find_all("ul", class_="col-12 text-center tournament-header m-0 mt-4"):
+    for ul in soup.find_all("ul"):
+        if "tournament-header" not in ul.get("class", []):
+            continue
         table_div = ul.find_next_sibling("div", class_="table-responsive")
         if not table_div:
             continue
         table_elem = table_div.find("table")
         if not table_elem:
             continue
-        event_name = ul.find("li").get_text(strip=True)
+        # First li is event name
+        event_li = ul.find("li")
+        if not event_li:
+            continue
+        event_name = event_li.get_text(strip=True)
         for row in table_elem.select("tbody tr"):
             cols = [c.get_text(strip=True) for c in row.find_all("td")]
             if len(cols) >= 4 and cols[2].isdigit() and int(cols[2]) > 0:
@@ -115,6 +120,14 @@ selected_event = st.selectbox("Select Event", event_options)
 name_filter = st.text_input("Filter by Name (optional)")
 go = st.button("Go")
 
+# Clear previous selection if state/event changed
+if "selected_name" in st.session_state:
+    st.session_state.pop("selected_name", None)
+if "selected_event" in st.session_state:
+    st.session_state.pop("selected_event", None)
+if "selected_state" in st.session_state:
+    st.session_state.pop("selected_state", None)
+
 if go:
     all_results = []
 
@@ -124,7 +137,9 @@ if go:
             if rows:
                 all_results.extend(rows)
         world_rows = fetch_world_data()
-        intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in [x["Name"] for x in all_results]]
+        # Only add international competitors not already in states
+        existing_names = {r["Name"] for r in all_results}
+        intl_rows = [r for r in world_rows if is_international(r["Location"]) and r["Name"] not in existing_names]
         all_results.extend(intl_rows)
 
     elif selected_state == "International":
@@ -150,16 +165,18 @@ if go:
         for event in EVENT_ORDER:
             if selected_event != "All" and event != selected_event:
                 continue
-            event_rows = df[df["Event"] == event]  # exact match
+            event_rows = df[df["Event"] == event]
             if not event_rows.empty:
                 st.subheader(event)
                 for idx, row in event_rows.iterrows():
                     cols = st.columns([1,3,1,2])
                     cols[0].write(row["Rank"])
-                    button_key = f"{selected_state}-{event}-{row['Name']}-{idx}"  # fully unique key
+                    state_key = selected_state if selected_state != "International" else "INTL"
+                    button_key = f"{state_key}-{event}-{row['Name']}-{idx}"
                     if cols[1].button(row["Name"], key=button_key):
                         st.session_state["selected_name"] = row["Name"]
                         st.session_state["selected_event"] = event
+                        st.session_state["selected_state"] = state_key
                     cols[2].write(row["Points"])
                     cols[3].write(row["Location"])
 
