@@ -3,9 +3,8 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
-import time
 
-# --- Constants ---
+# ------------------- Constants -------------------
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
@@ -42,9 +41,18 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-GOOGLE_SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTQY4ZoZb1HkVxZ3vRbiqY0oU/pub?gid=0&single=true&output=csv"
+# ------------------- Google Sheet -------------------
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+@st.cache_data(ttl=3600)
+def fetch_google_sheet():
+    try:
+        return pd.read_csv(SHEET_URL)
+    except:
+        return pd.DataFrame()
 
-# --- Functions ---
+sheet_df = fetch_google_sheet()
+
+# ------------------- Fetch HTML -------------------
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -55,14 +63,7 @@ def fetch_html(url):
         pass
     return None
 
-@st.cache_data(ttl=3600)
-def fetch_google_sheet():
-    try:
-        df = pd.read_csv(GOOGLE_SHEET_CSV)
-        return df
-    except:
-        return pd.DataFrame()
-
+# ------------------- Parse Standings -------------------
 def parse_standings(html):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
@@ -90,38 +91,24 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name.strip(),
+                        "Name": name.title(),
                         "Points": pts_val,
                         "Location": loc
                     })
     return data
 
-def dedupe_and_rank(event_data):
-    clean = {}
-    for ev, entries in event_data.items():
-        seen = set()
-        unique = []
-        for e in entries:
-            key = (e["Name"].lower(), e["Location"], e["Points"])
-            if key not in seen:
-                seen.add(key)
-                unique.append(e)
-        unique.sort(key=lambda x: x["Points"], reverse=True)
-        for idx, row in enumerate(unique, start=1):
-            row["Rank"] = idx
-        clean[ev] = unique
-    return clean
-
+# ------------------- Gather Data -------------------
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings for international fill-ins
+    # Always include world standings for International
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
+    # Add state/province results if selected
     if selected not in ["All", "International"]:
         country, code = REGION_CODES[selected]
         url = STATE_URL_TEMPLATE.format(country, code)
@@ -136,38 +123,19 @@ def gather_data(selected):
 
     elif selected == "All":
         any_data = False
-        regions = list(REGION_CODES.keys())
-        total = len(regions)
-        start_time = time.time()
-
-        for idx, region in enumerate(regions, start=1):
+        for region in REGION_CODES:
             country, code = REGION_CODES[region]
             url = STATE_URL_TEMPLATE.format(country, code)
             html = fetch_html(url)
-            progress_text = st.empty()
-            progress_bar = st.progress(0)
             if html:
                 data = parse_standings(html)
                 for ev, entries in data.items():
                     combined[ev].extend(entries)
                 if any(len(lst) > 0 for lst in data.values()):
                     any_data = True
-
-            # update progress
-            progress = idx / total
-            progress_bar.progress(progress)
-
-            elapsed = time.time() - start_time
-            avg_time = elapsed / idx
-            remaining = avg_time * (total - idx)
-            progress_text.info(
-                f"Fetching {region} ({idx}/{total})... Estimated time remaining: {int(remaining)} sec"
-            )
-
         return combined, any_data
 
-    # International
-    if selected == "International":
+    elif selected == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
@@ -179,24 +147,41 @@ def gather_data(selected):
 
     return combined, False
 
+# ------------------- Deduplicate & Rank -------------------
+def dedupe_and_rank(event_data):
+    clean = {}
+    for ev, entries in event_data.items():
+        seen = set()
+        unique = []
+        for e in entries:
+            key = (e["Name"], e["Location"], e["Points"])
+            if key not in seen:
+                seen.add(key)
+                unique.append(e)
+        unique.sort(key=lambda x: x["Points"], reverse=True)
+        for idx, row in enumerate(unique, start=1):
+            row["Rank"] = idx
+        clean[ev] = unique
+    return clean
+
+# ------------------- Show Results -------------------
 def show_results(data, sheet_df):
     for ev in EVENT_NAMES:
         rows = data.get(ev, [])
         if not rows:
             continue
 
-        # Build dataframe for display
-        df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
-
         st.subheader(ev)
 
-        for _, row in df.iterrows():
-            cols = st.columns([1,4,1,2])
+        for idx, row in enumerate(rows):
+            cols = st.columns([1, 4, 1, 2])
             cols[0].write(row["Rank"])
-            # Clickable name
+            
+            # clickable name
             name_lower = row["Name"].lower()
-            if cols[1].button(row["Name"], key=f"{ev}-{row['Name']}"):
-                # Filter Google Sheet for this competitor
+            button_key = f"{ev}-{row['Name']}-{idx}"
+            if cols[1].button(row["Name"], key=button_key):
+                # filter google sheet case-insensitive
                 matches = sheet_df[sheet_df["Name"].str.lower() == name_lower]
                 matches = matches[matches[ev] > 0]  # only show if points > 0
                 if not matches.empty:
@@ -206,5 +191,29 @@ def show_results(data, sheet_df):
                     st.info(info_str)
                 else:
                     st.info(f"No {ev} points found for {row['Name']}.")
+                    
             cols[2].write(row["Points"])
             cols[3].write(row["Location"])
+
+# ------------------- Streamlit UI -------------------
+st.title("ATA W01D Standings (50-59 Women, 1st Degree Black Belt)")
+
+selection = st.selectbox("Select region:", REGIONS)
+go = st.button("Go")
+
+if go:
+    with st.spinner("Loading standings..."):
+        raw, has_results = gather_data(selection)
+        data = dedupe_and_rank(raw)
+
+    if not has_results:
+        if selection in REGION_CODES:
+            st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
+        elif selection == "International":
+            st.warning("There are no 50‑59 1st Degree Women for International.")
+        else:
+            st.warning("No standings data found for this selection.")
+    else:
+        show_results(data, sheet_df)
+else:
+    st.info("Select a region or 'International' and click Go to view standings.")
