@@ -41,19 +41,22 @@ tournament_data = load_tournament_data()
 
 def parse_event_tables(soup):
     results = []
-    headers = soup.find_all("ul", class_="tournament-header")
-    tables = soup.find_all("table", class_="table")
-    for header, table in zip(headers, tables):
-        event_li = header.find("li")
-        if event_li:
-            event_name = event_li.get_text(strip=True)
-        else:
+    for ul in soup.find_all("ul", class_="tournament-header"):
+        table_div = ul.find_next_sibling("div", class_="table-responsive")
+        if not table_div:
             continue
-        for row in table.select("tbody tr"):
+        table_elem = table_div.find("table")
+        if not table_elem:
+            continue
+        event_li = ul.find("li")
+        if not event_li:
+            continue
+        event_name = event_li.get_text(strip=True)
+        for row in table_elem.select("tbody tr"):
             cols = [c.get_text(strip=True) for c in row.find_all("td")]
             if len(cols) >= 4:
                 results.append({
-                    "Name": cols[1],
+                    "Name": cols[1].strip().upper(),
                     "Location": cols[3],
                     "Points": int(cols[2]) if cols[2].isdigit() else 0,
                     "Event": event_name
