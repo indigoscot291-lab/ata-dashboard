@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
+import html
 
 # --- CONFIG ---
 EVENT_NAMES = [
@@ -92,7 +93,7 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name,
+                        "Name": name.title(),
                         "Points": pts_val,
                         "Location": loc
                     })
@@ -100,8 +101,6 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
-
-    # Always include world standings for international
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
@@ -115,11 +114,10 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
-
     elif selected == "All":
         any_data = False
         for region in REGION_CODES:
@@ -133,7 +131,6 @@ def gather_data(selected):
                 if any(len(lst) > 0 for lst in data.values()):
                     any_data = True
         return combined, any_data
-
     elif selected == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -143,7 +140,6 @@ def gather_data(selected):
         combined = intl
         has_any = any(len(lst) > 0 for lst in combined.values())
         return combined, has_any
-
     return combined, False
 
 def dedupe_and_rank(event_data):
@@ -186,37 +182,24 @@ if go:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
-                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
-
-                # Prepare clickable names with popup
-                display_rows = []
-                for _, row in df.iterrows():
-                    # Filter Google Sheet for this competitor and this event
+                st.subheader(ev)
+                # Build table manually with clickable names
+                table_html = "<table><tr><th>Rank</th><th>Name</th><th>Points</th><th>Location</th></tr>"
+                for row in rows:
+                    # Filter Google Sheet for this competitor & event
                     comp_data = sheet_df[
                         (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                        (sheet_df[ev] > 0)
+                        (sheet_df.get(ev, 0) > 0)
                     ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
-
                     if not comp_data.empty:
-                        popup_text = "\\n".join(f"{r['Date']} - {r['Tournament']} - {r['Points']} pts" for _, r in comp_data.iterrows())
+                        popup_text = "\\n".join(f"{r['Date']} - {r['Tournament']} - {r['Points']} pts"
+                                                for _, r in comp_data.iterrows())
+                        popup_text = html.escape(popup_text).replace("\n", "\\n").replace("'", "\\'")
+                        name_html = f'<a href="#" onclick="window.alert(\'{popup_text}\');">{row["Name"]}</a>'
                     else:
-                        popup_text = "No tournament data for this event."
-
-                    name_html = f'<a href="#" onclick="window.alert(\'{popup_text}\');">{row["Name"]}</a>'
-
-                    display_rows.append({
-                        "Rank": row["Rank"],
-                        "Name": name_html,
-                        "Points": row["Points"],
-                        "Location": row["Location"]
-                    })
-
-                display_df = pd.DataFrame(display_rows)
-
-                st.subheader(ev)
-                st.markdown(
-                    display_df.to_html(escape=False, index=False),
-                    unsafe_allow_html=True
-                )
+                        name_html = row["Name"]
+                    table_html += f"<tr><td>{row['Rank']}</td><td>{name_html}</td><td>{row['Points']}</td><td>{row['Location']}</td></tr>"
+                table_html += "</table>"
+                st.markdown(table_html, unsafe_allow_html=True)
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
