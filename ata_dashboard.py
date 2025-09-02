@@ -6,11 +6,12 @@ import re
 
 # --- CONFIG ---
 EVENT_NAMES = [
-    "Forms", "Weapons", "Combat", "Sparring",
+    "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
 REGION_CODES = {
+    # US states
     "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
     "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
     "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
@@ -28,6 +29,7 @@ REGION_CODES = {
     "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
     "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
     "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
+    # Canadian provinces
     "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
     "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
     "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
@@ -39,6 +41,7 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
+# Google Sheet CSV export
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
 # --- FUNCTIONS ---
@@ -95,6 +98,54 @@ def parse_standings(html):
                     })
     return data
 
+def gather_data(selected):
+    combined = {ev: [] for ev in EVENT_NAMES}
+
+    # Always include world standings for international
+    world_html = fetch_html(WORLD_URL)
+    if world_html:
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
+            combined[ev].extend(entries)
+
+    if selected not in ["All", "International"]:
+        country, code = REGION_CODES[selected]
+        url = STATE_URL_TEMPLATE.format(country, code)
+        html = fetch_html(url)
+        if html:
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev] = entries  # only this state
+            return combined, any(len(lst) > 0 for lst in state_data.values())
+        else:
+            return combined, False
+
+    elif selected == "All":
+        any_data = False
+        for region in REGION_CODES:
+            country, code = REGION_CODES[region]
+            url = STATE_URL_TEMPLATE.format(country, code)
+            html = fetch_html(url)
+            if html:
+                data = parse_standings(html)
+                for ev, entries in data.items():
+                    combined[ev].extend(entries)
+                if any(len(lst) > 0 for lst in data.values()):
+                    any_data = True
+        return combined, any_data
+
+    elif selected == "International":
+        intl = {ev: [] for ev in EVENT_NAMES}
+        for ev, entries in combined.items():
+            for e in entries:
+                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                    intl[ev].append(e)
+        combined = intl
+        has_any = any(len(lst) > 0 for lst in combined.values())
+        return combined, has_any
+
+    return combined, False
+
 def dedupe_and_rank(event_data):
     clean = {}
     for ev, entries in event_data.items():
@@ -121,32 +172,34 @@ go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        world_html = fetch_html(WORLD_URL)
-        event_data = parse_standings(world_html) if world_html else {}
-        data = dedupe_and_rank(event_data)
+        raw, has_results = gather_data(selection)
+        data = dedupe_and_rank(raw)
 
-    if not data:
-        st.warning("No standings data found.")
+    if not has_results:
+        if selection in REGION_CODES:
+            st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
+        elif selection == "International":
+            st.warning("There are no 50‑59 1st Degree Women for International.")
+        else:
+            st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
-                st.subheader(ev)
-
-                # ✅ Main table - no index column
                 df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
-                st.dataframe(df.reset_index(drop=True), use_container_width=True)
-
-                # ✅ Each name expands to show tournaments (with Type included)
+                st.subheader(ev)
+                # Display table with clickable expanders for each name
                 for _, row in df.iterrows():
-                    with st.expander(f"{row['Rank']}. {row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                    # Use expander for dropdown
+                    with st.expander(f"{row['Rank']}. {row['Name']} - {row['Points']} pts - {row['Location']}"):
+                        # Filter Google Sheet for this competitor and event
                         comp_data = sheet_df[
-                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) & 
                             (sheet_df[ev] > 0)
                         ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
-                            st.dataframe(comp_data.reset_index(drop=True), use_container_width=True)
+                            st.dataframe(comp_data, use_container_width=True)
                         else:
-                            st.write("No tournament data for this competitor.")
+                            st.write("No tournament data for this event.")
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
