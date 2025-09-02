@@ -189,29 +189,21 @@ if go:
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
-                
                 # Table rows
                 for row in rows:
                     cols = st.columns([1,4,2,1])
                     cols[0].write(row["Rank"])
-                    
-                    # Name clickable with expander
+                    # Name clickable using expander inside table
                     with cols[1].expander(row["Name"]):
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
                         ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
-                        
                         if not comp_data.empty:
-                            comp_data = comp_data.reset_index(drop=True)  # remove index column
-                            st.dataframe(
-                                comp_data,
-                                use_container_width=True,
-                                height=min(300, 35*len(comp_data))  # compact for mobile
-                            )
+                            comp_data = comp_data.reset_index(drop=True)
+                            st.dataframe(comp_data, use_container_width=True, height=min(300, 35*len(comp_data)), hide_index=True)
                         else:
                             st.write("No tournament data for this event.")
-                    
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
 else:
