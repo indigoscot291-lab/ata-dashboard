@@ -163,6 +163,7 @@ def dedupe_and_rank(event_data):
 st.title("ATA W01D Standings")
 
 sheet_df = fetch_sheet()
+mobile = st.radio("Are you on a mobile device?", ("No", "Yes"))
 selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
@@ -193,18 +194,39 @@ if go:
                 for row in rows:
                     cols = st.columns([1,4,2,1])
                     cols[0].write(row["Rank"])
-                    with cols[1].expander(row["Name"]):
-                        comp_data = sheet_df[
-                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                            (sheet_df[ev] > 0)
-                        ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
-                        if not comp_data.empty:
-                            comp_data = comp_data.reset_index(drop=True)
-                            max_height = min(300, 35*len(comp_data))
-                            st.dataframe(comp_data, use_container_width=True, height=max_height, hide_index=True)
-                        else:
-                            st.write("No tournament data for this event.")
+                    cols[1].write(row["Name"])
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
+
+                # Mobile: show drop-down below the table
+                if mobile == "Yes":
+                    st.write("### Competitor Details")
+                    for row in rows:
+                        with st.expander(f"{row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                            comp_data = sheet_df[
+                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
+                                (sheet_df[ev] > 0)
+                            ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
+                            if not comp_data.empty:
+                                st.dataframe(comp_data, use_container_width=True)
+                            else:
+                                st.write("No tournament data for this event.")
+
+        # Desktop: keep original inline expanders inside the table
+        if mobile == "No":
+            for ev in EVENT_NAMES:
+                rows = data.get(ev, [])
+                if rows:
+                    st.write(f"### {ev} - Competitor Details")
+                    for row in rows:
+                        with st.expander(f"{row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                            comp_data = sheet_df[
+                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
+                                (sheet_df[ev] > 0)
+                            ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
+                            if not comp_data.empty:
+                                st.dataframe(comp_data, use_container_width=True)
+                            else:
+                                st.write("No tournament data for this event.")
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
