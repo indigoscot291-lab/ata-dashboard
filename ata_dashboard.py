@@ -112,7 +112,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -183,32 +183,21 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Table header (mobile-friendly proportions)
-                cols_header = st.columns([1,4,2,2,2])
-                cols_header[0].write("Rank")
-                cols_header[1].write("Name")
-                cols_header[2].write("Points")
-                cols_header[3].write("Location")
-                cols_header[4].write("Type")
-                # Table rows
+                # Reorder columns: Rank, Name, Location, Points
+                display_df = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
+                st.dataframe(display_df, use_container_width=True)
+
+                # Expander per competitor for tournament breakdown
                 for row in rows:
-                    cols = st.columns([1,4,2,2,2])
-                    cols[0].write(row["Rank"])
-                    # Name clickable using expander
-                    with cols[1].expander(row["Name"]):
+                    with st.expander(row["Name"]):
                         comp_data = sheet_df[
-                            (sheet_df['Name'].str.lower() == row['Name'].lower()) & 
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
                         ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
-                            st.dataframe(comp_data, use_container_width=True)
+                            # Remove index column for mobile/PC friendliness
+                            st.dataframe(comp_data.style.hide(axis="index"), use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
-                    cols[2].write(row["Points"])
-                    cols[3].write(row["Location"])
-                    # Display Type if present in Google Sheet
-                    if "Type" in sheet_df.columns:
-                        matching_type = comp_data["Type"].iloc[0] if not comp_data.empty else ""
-                        cols[4].write(matching_type)
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
