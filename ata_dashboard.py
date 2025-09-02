@@ -101,7 +101,7 @@ def parse_standings(html):
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings for international
+    # Always include world standings
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
@@ -115,7 +115,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries  # override with state-only
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -186,17 +186,19 @@ if go:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
+                # ✅ Main table stays exactly as before
                 df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
                 st.subheader(ev)
+                st.dataframe(df, use_container_width=True)
+
+                # ✅ Tournament breakdowns include Type + no index numbers
                 for _, row in df.iterrows():
                     with st.expander(f"{row['Rank']}. {row['Name']} ({row['Points']} pts) - {row['Location']}"):
-                        # Filter Google Sheet for this competitor and this event
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
                         ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
-                            # Reset index so we don't display 0,1,2...
                             st.dataframe(comp_data.reset_index(drop=True), use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
