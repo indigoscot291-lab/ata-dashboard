@@ -10,13 +10,8 @@ EVENT_NAMES = [
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
-REGION_CODES = {
-    "Georgia": ("US", "GA"),
-    # Add other states/provinces as needed
-}
-
+REGION_CODES = {"Georgia": ("US", "GA")}  # Example
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
-WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
@@ -78,7 +73,6 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
-    # Only GA example here
     if selected in REGION_CODES:
         country, code = REGION_CODES[selected]
         html = fetch_html(STATE_URL_TEMPLATE.format(country, code))
@@ -104,7 +98,7 @@ def dedupe_and_rank(event_data):
     return clean
 
 # --- STREAMLIT APP ---
-st.title("ATA W01D Standings")
+st.title("ATA W01D Standings (Clickable Names)")
 
 sheet_df = fetch_sheet()
 selection = st.selectbox("Select region:", ["Georgia"])
@@ -122,17 +116,28 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Build table manually
+                # Build HTML table
+                table_html = "<table style='width:100%; border-collapse: collapse;'>"
+                table_html += "<tr style='border-bottom:1px solid black;'><th>Rank</th><th>Name</th><th>Points</th><th>Location</th></tr>"
                 for row in rows:
-                    # Name clickable
-                    key = f"{ev}-{row['Name']}"
-                    if st.button(row["Name"], key=key):
-                        comp_data = sheet_df[
-                            (sheet_df['Name'].apply(lambda x: normalize_name(x)) == normalize_name(row['Name'])) &
-                            (sheet_df[ev] > 0)
-                        ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
-                        if not comp_data.empty:
-                            st.dataframe(comp_data, use_container_width=True)
-                        else:
-                            st.write("No tournament data for this event.")
-                    st.write(f"Rank: {row['Rank']} | Points: {row['Points']} | Location: {row['Location']}")
+                    # Each name will have a clickable anchor with a unique key
+                    name_id = f"{ev}-{row['Name']}".replace(" ", "_")
+                    table_html += f"<tr style='border-bottom:1px solid #ddd;'>"
+                    table_html += f"<td>{row['Rank']}</td>"
+                    table_html += f"<td><a href='#{name_id}'>{row['Name']}</a></td>"
+                    table_html += f"<td>{row['Points']}</td>"
+                    table_html += f"<td>{row['Location']}</td>"
+                    table_html += "</tr>"
+                table_html += "</table>"
+                st.markdown(table_html, unsafe_allow_html=True)
+
+                # Display tournament info for each competitor
+                for row in rows:
+                    comp_data = sheet_df[
+                        (sheet_df['Name'].apply(lambda x: normalize_name(x)) == normalize_name(row['Name'])) &
+                        (sheet_df[ev] > 0)
+                    ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+                    if not comp_data.empty:
+                        st.markdown(f"<a id='{ev}-{row['Name'].replace(' ','_')}'></a>", unsafe_allow_html=True)
+                        st.markdown(f"**{row['Name']} - {ev} Tournament Results:**")
+                        st.dataframe(comp_data, use_container_width=True)
