@@ -160,7 +160,7 @@ def dedupe_and_rank(event_data):
     return clean
 
 # --- STREAMLIT APP ---
-st.title("ATA W01D Standings")
+st.title("ATA 1st Degree 50-59 Women Standings")
 
 sheet_df = fetch_sheet()
 selection = st.selectbox("Select region:", REGIONS)
@@ -198,7 +198,7 @@ if go:
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
-                        ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+                        ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
                             st.dataframe(comp_data, use_container_width=True)
                         else:
@@ -207,4 +207,3 @@ if go:
                     cols[3].write(row["Location"])
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
-
