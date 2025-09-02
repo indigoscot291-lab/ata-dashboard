@@ -41,7 +41,6 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-# Google Sheet CSV export
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
 # --- FUNCTIONS ---
@@ -92,7 +91,7 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name.strip(),
+                        "Name": name.title(),
                         "Points": pts_val,
                         "Location": loc
                     })
@@ -100,8 +99,6 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
-
-    # Always include world standings for international
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
@@ -115,7 +112,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -187,20 +184,12 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Build table manually
-                table_html = "<table style='width:100%; border-collapse:collapse;'>"
-                table_html += "<tr><th>Rank</th><th>Name</th><th>Points</th><th>Location</th></tr>"
+                # Build table with columns
                 for row in rows:
-                    # Name as clickable expander
-                    name_html = f"<a href='#' onclick='window.scrollTo(0,0)'>{row['Name']}</a>"
-                    table_html += f"<tr><td>{row['Rank']}</td><td>{name_html}</td><td>{row['Points']}</td><td>{row['Location']}</td></tr>"
-                table_html += "</table>"
-                st.markdown(table_html, unsafe_allow_html=True)
-
-                # Now use buttons for the popups below
-                for row in rows:
-                    if st.button(f"Show {row['Name']} tournaments", key=f"{ev}-{row['Name']}"):
-                        # Filter Google Sheet for this competitor and this event
+                    cols = st.columns([1, 4, 1, 2, 2])
+                    cols[0].write(row["Rank"])
+                    # Name as a button triggers popup
+                    if cols[1].button(row["Name"], key=f"{ev}-{row['Name']}"):
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
@@ -209,5 +198,8 @@ if go:
                             st.dataframe(comp_data, use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
+                    cols[2].write(row["Points"])
+                    cols[3].write(row["Location"])
+                    cols[4].write("")  # placeholder for spacing
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
