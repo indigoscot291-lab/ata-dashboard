@@ -92,9 +92,9 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name.strip().title(),
+                        "Name": name.title(),
                         "Points": pts_val,
-                        "Location": loc.strip()
+                        "Location": loc
                     })
     return data
 
@@ -162,11 +162,13 @@ def dedupe_and_rank(event_data):
         clean[ev] = unique
     return clean
 
+def normalize_name(name):
+    return re.sub(r"\s+", " ", name.strip().lower())
+
 # --- STREAMLIT APP ---
 st.title("ATA W01D Standings")
 
 sheet_df = fetch_sheet()
-
 selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
@@ -188,19 +190,23 @@ if go:
             if rows:
                 st.subheader(ev)
                 df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
-                for _, row in df.iterrows():
-                    # clickable name using expander
-                    with st.expander(f"{row['Rank']}. {row['Name']} ({row['Points']} pts) - {row['Location']}"):
-                        if ev in sheet_df.columns:
+                
+                # Build table with clickable names
+                for idx, row in df.iterrows():
+                    # Clickable competitor name using a button
+                    key = f"{ev}-{row['Name']}-{idx}"
+                    if st.button(row["Name"], key=key):
+                        with st.modal(f"{row['Name']} - {ev}"):
                             comp_data = sheet_df[
-                                (sheet_df['Name'].str.strip().str.lower() == row['Name'].strip().lower()) &
+                                (sheet_df['Name'].apply(lambda x: normalize_name(x)) == normalize_name(row['Name'])) &
                                 (sheet_df[ev] > 0)
-                            ][["Date", "Tournament", ev]].rename(columns={ev: "Points"})
+                            ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
                             if not comp_data.empty:
                                 st.dataframe(comp_data, use_container_width=True)
                             else:
                                 st.write("No tournament data for this event.")
-                        else:
-                            st.write("No tournament data for this event.")
+                    
+                    # Display Rank, Points, Location inline
+                    st.write(f"Rank: {row['Rank']} | Points: {row['Points']} | Location: {row['Location']}")
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
