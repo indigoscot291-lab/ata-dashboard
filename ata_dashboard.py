@@ -160,7 +160,7 @@ def dedupe_and_rank(event_data):
     return clean
 
 # --- STREAMLIT APP ---
-st.title("ATA 1st Degree 50-59 Women Standings")
+st.title("ATA W01D Standings")
 
 sheet_df = fetch_sheet()
 selection = st.selectbox("Select region:", REGIONS)
@@ -183,18 +183,21 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Table header
-                cols_header = st.columns([1,4,1,2])
-                cols_header[0].write("Rank")
-                cols_header[1].write("Name")
-                cols_header[2].write("Points")
-                cols_header[3].write("Location")
-                # Table rows
+                # Prepare DataFrame for table display (mobile-friendly)
+                table_rows = []
                 for row in rows:
-                    cols = st.columns([1,4,1,2])
-                    cols[0].write(row["Rank"])
-                    # Name clickable using expander
-                    with cols[1].expander(row["Name"]):
+                    table_rows.append({
+                        "Name": row["Name"],
+                        "Points": row["Points"],
+                        "Location": row["Location"],
+                        "Rank": row["Rank"]
+                    })
+                df = pd.DataFrame(table_rows)
+                st.dataframe(df[["Rank","Name","Points","Location"]], use_container_width=True)
+                
+                # Add expanders for each competitor
+                for row in rows:
+                    with st.expander(f"{row['Name']} - {row['Points']} pts - {row['Location']}"):
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
@@ -203,7 +206,5 @@ if go:
                             st.dataframe(comp_data, use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
-                    cols[2].write(row["Points"])
-                    cols[3].write(row["Location"])
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
