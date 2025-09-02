@@ -10,6 +10,11 @@ EVENT_NAMES = [
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
+GROUPS = {
+    "1st Degree Black Belt Women 50-59": "W01D",
+    "2/3 Degree Black Belt Women 40-49": "W23C"
+}
+
 REGION_CODES = {
     # US states
     "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
@@ -42,11 +47,6 @@ STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/sta
 WORLD_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={}"
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
-
-GROUPS = {
-    "1st Degree Black Belt Women 50-59": "W01D",
-    "2nd & 3rd Degree Black Belt Women 40-49": "W23C"
-}
 
 # --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
@@ -102,17 +102,17 @@ def parse_standings(html):
                     })
     return data
 
-def gather_data(selected_region, code):
+def gather_data(selected_region, group_code):
     combined = {ev: [] for ev in EVENT_NAMES}
-    world_html = fetch_html(WORLD_URL_TEMPLATE.format(code))
+    world_html = fetch_html(WORLD_URL_TEMPLATE.format(group_code))
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
     if selected_region not in ["All", "International"]:
-        country, state_code = REGION_CODES[selected_region]
-        url = STATE_URL_TEMPLATE.format(country, state_code, code)
+        country, code = REGION_CODES[selected_region]
+        url = STATE_URL_TEMPLATE.format(country, code, group_code)
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
@@ -125,8 +125,8 @@ def gather_data(selected_region, code):
     elif selected_region == "All":
         any_data = False
         for region in REGION_CODES:
-            country, state_code = REGION_CODES[region]
-            url = STATE_URL_TEMPLATE.format(country, state_code, code)
+            country, code = REGION_CODES[region]
+            url = STATE_URL_TEMPLATE.format(country, code, group_code)
             html = fetch_html(url)
             if html:
                 data = parse_standings(html)
@@ -167,16 +167,20 @@ def dedupe_and_rank(event_data):
 # --- STREAMLIT APP ---
 st.title("ATA Standings")
 
-# Group selection
+# Step 1: Mobile check
+is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+
+# Step 2: Group selection
 selected_group = st.selectbox("Select Group:", list(GROUPS.keys()))
 group_code = GROUPS[selected_group]
 
-sheet_df = fetch_sheet()
+# Step 3: Region selection
 selection = st.selectbox("Select region:", REGIONS)
-go = st.button("Go")
 
-# Determine if we should show Google Sheet data
+sheet_df = fetch_sheet()
 show_sheet = selected_group == "1st Degree Black Belt Women 50-59"
+
+go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
@@ -186,18 +190,15 @@ if go:
     if not has_results:
         st.warning("No standings data found for this selection/group.")
     else:
-        # Desktop/Mobile detection
-        is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
-
         if is_mobile:
-            # Mobile: show main table first without drop-downs
+            # Mobile: main tables first, points underneath
             for ev in EVENT_NAMES:
                 rows = data.get(ev, [])
                 if rows:
                     st.subheader(ev)
                     df_main = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
                     st.dataframe(df_main, use_container_width=True)
-            # Mobile: show all competitor points underneath
+
             if show_sheet and not sheet_df.empty:
                 for ev in EVENT_NAMES:
                     st.subheader(f"{ev} - Competitor Points Details")
@@ -209,7 +210,7 @@ if go:
                         if not comp_data.empty:
                             st.dataframe(comp_data, use_container_width=True)
         else:
-            # Desktop: show table with dropdowns inside the table
+            # Desktop: table with dropdowns
             for ev in EVENT_NAMES:
                 rows = data.get(ev, [])
                 if rows:
