@@ -183,24 +183,24 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Table header (mobile friendly)
-                cols_header = st.columns([1, 4, 2, 1])
+                # Table header
+                cols_header = st.columns([1,4,2,1])
                 cols_header[0].write("Rank")
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
                 # Table rows
                 for row in rows:
-                    cols = st.columns([1, 4, 2, 1])
+                    cols = st.columns([1,4,2,1])
                     cols[0].write(row["Rank"])
-                    # Name clickable using expander (inside the table)
                     with cols[1].expander(row["Name"]):
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
-                        ][["Date", "Tournament", "Type", ev]].rename(columns={ev:"Points"})
+                        ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
-                            st.dataframe(comp_data.style.hide(axis="index"), use_container_width=True)
+                            comp_data = comp_data.reset_index(drop=True)  # hide index
+                            st.dataframe(comp_data, use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
                     cols[2].write(row["Location"])
