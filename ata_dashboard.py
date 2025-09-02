@@ -112,7 +112,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -183,21 +183,27 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Reorder columns: Rank, Name, Location, Points
-                display_df = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
-                st.dataframe(display_df, use_container_width=True)
-
-                # Expander per competitor for tournament breakdown
+                # Table header (mobile friendly)
+                cols_header = st.columns([1, 4, 2, 1])
+                cols_header[0].write("Rank")
+                cols_header[1].write("Name")
+                cols_header[2].write("Location")
+                cols_header[3].write("Points")
+                # Table rows
                 for row in rows:
-                    with st.expander(row["Name"]):
+                    cols = st.columns([1, 4, 2, 1])
+                    cols[0].write(row["Rank"])
+                    # Name clickable using expander (inside the table)
+                    with cols[1].expander(row["Name"]):
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
-                        ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
+                        ][["Date", "Tournament", "Type", ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
-                            # Remove index column for mobile/PC friendliness
                             st.dataframe(comp_data.style.hide(axis="index"), use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
+                    cols[2].write(row["Location"])
+                    cols[3].write(row["Points"])
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
