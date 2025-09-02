@@ -6,7 +6,7 @@ import re
 
 # --- CONFIG ---
 EVENT_NAMES = [
-    "Forms", "Weapons", "Combat Weapons", "Sparring",
+    "Forms", "Weapons", "Combat", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
@@ -41,6 +41,7 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
+# Google Sheet CSV export
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
 # --- FUNCTIONS ---
@@ -91,7 +92,7 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name.strip(),
+                        "Name": name.title(),
                         "Points": pts_val,
                         "Location": loc
                     })
@@ -99,6 +100,8 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
+
+    # Always include world standings for international
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
@@ -149,7 +152,7 @@ def dedupe_and_rank(event_data):
         seen = set()
         unique = []
         for e in entries:
-            key = (e["Name"].lower(), e["Location"], e["Points"])
+            key = (e["Name"], e["Location"], e["Points"])
             if key not in seen:
                 seen.add(key)
                 unique.append(e)
@@ -163,6 +166,7 @@ def dedupe_and_rank(event_data):
 st.title("ATA W01D Standings")
 
 sheet_df = fetch_sheet()
+
 selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
@@ -173,38 +177,28 @@ if go:
 
     if not has_results:
         if selection in REGION_CODES:
-            st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
+            st.warning(f"There are no 50-59 1st Degree Women for {selection}.")
         elif selection == "International":
-            st.warning("There are no 50‑59 1st Degree Women for International.")
+            st.warning("There are no 50-59 1st Degree Women for International.")
         else:
             st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
+                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
                 st.subheader(ev)
-                # Table header
-                cols_header = st.columns([1,4,1,2])
-                cols_header[0].write("Rank")
-                cols_header[1].write("Name")
-                cols_header[2].write("Points")
-                cols_header[3].write("Location")
-                # Table rows
-                for row in rows:
-                    cols = st.columns([1,4,1,2])
-                    cols[0].write(row["Rank"])
-                    # Name clickable using expander
-                    with cols[1].expander(row["Name"]):
+                for _, row in df.iterrows():
+                    with st.expander(f"{row['Rank']}. {row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                        # Filter Google Sheet for this competitor and this event
                         comp_data = sheet_df[
                             (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
-                        ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+                        ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
-                            st.dataframe(comp_data, use_container_width=True)
+                            # Reset index so we don't display 0,1,2...
+                            st.dataframe(comp_data.reset_index(drop=True), use_container_width=True)
                         else:
                             st.write("No tournament data for this event.")
-                    cols[2].write(row["Points"])
-                    cols[3].write(row["Location"])
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
-
