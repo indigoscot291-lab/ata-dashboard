@@ -11,40 +11,18 @@ EVENT_NAMES = [
 ]
 
 REGION_CODES = {
-    # US states
-    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
-    "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
-    "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
-    "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
-    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"),
-    "Kansas": ("US", "KS"), "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"),
-    "Maine": ("US", "ME"), "Maryland": ("US", "MD"), "Massachusetts": ("US", "MA"),
-    "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
-    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"),
-    "Nevada": ("US", "NV"), "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"),
-    "New Mexico": ("US", "NM"), "New York": ("US", "NY"), "North Carolina": ("US", "NC"),
-    "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
-    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"),
-    "South Carolina": ("US", "SC"), "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"),
-    "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
-    "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
-    "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
-    # Canadian provinces
-    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
-    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
-    "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
-    "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
+    "Georgia": ("US", "GA"),
+    # Add other states/provinces as needed
 }
-
-REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
-# Google Sheet CSV export
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
-# --- FUNCTIONS ---
+def normalize_name(name):
+    return re.sub(r"\s+", " ", name.strip().lower())
+
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -100,50 +78,13 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
-
-    # Always include world standings for international
-    world_html = fetch_html(WORLD_URL)
-    if world_html:
-        world_data = parse_standings(world_html)
-        for ev, entries in world_data.items():
-            combined[ev].extend(entries)
-
-    if selected not in ["All", "International"]:
+    # Only GA example here
+    if selected in REGION_CODES:
         country, code = REGION_CODES[selected]
-        url = STATE_URL_TEMPLATE.format(country, code)
-        html = fetch_html(url)
+        html = fetch_html(STATE_URL_TEMPLATE.format(country, code))
         if html:
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
-            return combined, any(len(lst) > 0 for lst in state_data.values())
-        else:
-            return combined, False
-
-    elif selected == "All":
-        any_data = False
-        for region in REGION_CODES:
-            country, code = REGION_CODES[region]
-            url = STATE_URL_TEMPLATE.format(country, code)
-            html = fetch_html(url)
-            if html:
-                data = parse_standings(html)
-                for ev, entries in data.items():
-                    combined[ev].extend(entries)
-                if any(len(lst) > 0 for lst in data.values()):
-                    any_data = True
-        return combined, any_data
-
-    elif selected == "International":
-        intl = {ev: [] for ev in EVENT_NAMES}
-        for ev, entries in combined.items():
-            for e in entries:
-                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
-                    intl[ev].append(e)
-        combined = intl
-        has_any = any(len(lst) > 0 for lst in combined.values())
-        return combined, has_any
-
+            combined = parse_standings(html)
+            return combined, any(len(lst) > 0 for lst in combined.values())
     return combined, False
 
 def dedupe_and_rank(event_data):
@@ -162,14 +103,11 @@ def dedupe_and_rank(event_data):
         clean[ev] = unique
     return clean
 
-def normalize_name(name):
-    return re.sub(r"\s+", " ", name.strip().lower())
-
 # --- STREAMLIT APP ---
 st.title("ATA W01D Standings")
 
 sheet_df = fetch_sheet()
-selection = st.selectbox("Select region:", REGIONS)
+selection = st.selectbox("Select region:", ["Georgia"])
 go = st.button("Go")
 
 if go:
@@ -178,35 +116,23 @@ if go:
         data = dedupe_and_rank(raw)
 
     if not has_results:
-        if selection in REGION_CODES:
-            st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
-        elif selection == "International":
-            st.warning("There are no 50‑59 1st Degree Women for International.")
-        else:
-            st.warning("No standings data found for this selection.")
+        st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
-                
-                # Build table with clickable names
-                for idx, row in df.iterrows():
-                    # Clickable competitor name using a button
-                    key = f"{ev}-{row['Name']}-{idx}"
+                # Build table manually
+                for row in rows:
+                    # Name clickable
+                    key = f"{ev}-{row['Name']}"
                     if st.button(row["Name"], key=key):
-                        with st.modal(f"{row['Name']} - {ev}"):
-                            comp_data = sheet_df[
-                                (sheet_df['Name'].apply(lambda x: normalize_name(x)) == normalize_name(row['Name'])) &
-                                (sheet_df[ev] > 0)
-                            ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
-                            if not comp_data.empty:
-                                st.dataframe(comp_data, use_container_width=True)
-                            else:
-                                st.write("No tournament data for this event.")
-                    
-                    # Display Rank, Points, Location inline
+                        comp_data = sheet_df[
+                            (sheet_df['Name'].apply(lambda x: normalize_name(x)) == normalize_name(row['Name'])) &
+                            (sheet_df[ev] > 0)
+                        ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+                        if not comp_data.empty:
+                            st.dataframe(comp_data, use_container_width=True)
+                        else:
+                            st.write("No tournament data for this event.")
                     st.write(f"Rank: {row['Rank']} | Points: {row['Points']} | Location: {row['Location']}")
-else:
-    st.info("Select a region or 'International' and click Go to view standings.")
