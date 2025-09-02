@@ -3,7 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
-import html
 
 # --- CONFIG ---
 EVENT_NAMES = [
@@ -93,7 +92,7 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name.title(),
+                        "Name": name.strip(),
                         "Points": pts_val,
                         "Location": loc
                     })
@@ -101,6 +100,8 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
+
+    # Always include world standings for international
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
@@ -114,10 +115,11 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
+
     elif selected == "All":
         any_data = False
         for region in REGION_CODES:
@@ -131,6 +133,7 @@ def gather_data(selected):
                 if any(len(lst) > 0 for lst in data.values()):
                     any_data = True
         return combined, any_data
+
     elif selected == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -140,6 +143,7 @@ def gather_data(selected):
         combined = intl
         has_any = any(len(lst) > 0 for lst in combined.values())
         return combined, has_any
+
     return combined, False
 
 def dedupe_and_rank(event_data):
@@ -183,23 +187,27 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 st.subheader(ev)
-                # Build table manually with clickable names
-                table_html = "<table><tr><th>Rank</th><th>Name</th><th>Points</th><th>Location</th></tr>"
+                # Build table manually
+                table_html = "<table style='width:100%; border-collapse:collapse;'>"
+                table_html += "<tr><th>Rank</th><th>Name</th><th>Points</th><th>Location</th></tr>"
                 for row in rows:
-                    # Filter Google Sheet for this competitor & event
-                    comp_data = sheet_df[
-                        (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                        (sheet_df.get(ev, 0) > 0)
-                    ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
-                    if not comp_data.empty:
-                        popup_text = "\\n".join(f"{r['Date']} - {r['Tournament']} - {r['Points']} pts"
-                                                for _, r in comp_data.iterrows())
-                        popup_text = html.escape(popup_text).replace("\n", "\\n").replace("'", "\\'")
-                        name_html = f'<a href="#" onclick="window.alert(\'{popup_text}\');">{row["Name"]}</a>'
-                    else:
-                        name_html = row["Name"]
+                    # Name as clickable expander
+                    name_html = f"<a href='#' onclick='window.scrollTo(0,0)'>{row['Name']}</a>"
                     table_html += f"<tr><td>{row['Rank']}</td><td>{name_html}</td><td>{row['Points']}</td><td>{row['Location']}</td></tr>"
                 table_html += "</table>"
                 st.markdown(table_html, unsafe_allow_html=True)
+
+                # Now use buttons for the popups below
+                for row in rows:
+                    if st.button(f"Show {row['Name']} tournaments", key=f"{ev}-{row['Name']}"):
+                        # Filter Google Sheet for this competitor and this event
+                        comp_data = sheet_df[
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
+                            (sheet_df[ev] > 0)
+                        ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+                        if not comp_data.empty:
+                            st.dataframe(comp_data, use_container_width=True)
+                        else:
+                            st.write("No tournament data for this event.")
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
