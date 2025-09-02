@@ -6,18 +6,44 @@ import re
 
 # --- CONFIG ---
 EVENT_NAMES = [
-    "Forms", "Weapons", "Combat", "Sparring",
+    "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
-REGION_CODES = {"Georgia": ("US", "GA")}  # Example
+REGION_CODES = {
+    # US states
+    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
+    "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
+    "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
+    "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
+    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"),
+    "Kansas": ("US", "KS"), "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"),
+    "Maine": ("US", "ME"), "Maryland": ("US", "MD"), "Massachusetts": ("US", "MA"),
+    "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
+    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"),
+    "Nevada": ("US", "NV"), "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"),
+    "New Mexico": ("US", "NM"), "New York": ("US", "NY"), "North Carolina": ("US", "NC"),
+    "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
+    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"),
+    "South Carolina": ("US", "SC"), "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"),
+    "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
+    "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
+    "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
+    # Canadian provinces
+    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
+    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
+    "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
+    "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
+}
+
+REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
+
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
+WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
-def normalize_name(name):
-    return re.sub(r"\s+", " ", name.strip().lower())
-
+# --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
@@ -73,12 +99,49 @@ def parse_standings(html):
 
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
-    if selected in REGION_CODES:
+
+    world_html = fetch_html(WORLD_URL)
+    if world_html:
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
+            combined[ev].extend(entries)
+
+    if selected not in ["All", "International"]:
         country, code = REGION_CODES[selected]
-        html = fetch_html(STATE_URL_TEMPLATE.format(country, code))
+        url = STATE_URL_TEMPLATE.format(country, code)
+        html = fetch_html(url)
         if html:
-            combined = parse_standings(html)
-            return combined, any(len(lst) > 0 for lst in combined.values())
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev] = entries
+            return combined, any(len(lst) > 0 for lst in state_data.values())
+        else:
+            return combined, False
+
+    elif selected == "All":
+        any_data = False
+        for region in REGION_CODES:
+            country, code = REGION_CODES[region]
+            url = STATE_URL_TEMPLATE.format(country, code)
+            html = fetch_html(url)
+            if html:
+                data = parse_standings(html)
+                for ev, entries in data.items():
+                    combined[ev].extend(entries)
+                if any(len(lst) > 0 for lst in data.values()):
+                    any_data = True
+        return combined, any_data
+
+    elif selected == "International":
+        intl = {ev: [] for ev in EVENT_NAMES}
+        for ev, entries in combined.items():
+            for e in entries:
+                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                    intl[ev].append(e)
+        combined = intl
+        has_any = any(len(lst) > 0 for lst in combined.values())
+        return combined, has_any
+
     return combined, False
 
 def dedupe_and_rank(event_data):
@@ -98,10 +161,11 @@ def dedupe_and_rank(event_data):
     return clean
 
 # --- STREAMLIT APP ---
-st.title("ATA W01D Standings (Clickable Names)")
+st.title("ATA W01D Standings")
 
 sheet_df = fetch_sheet()
-selection = st.selectbox("Select region:", ["Georgia"])
+
+selection = st.selectbox("Select region:", REGIONS)
 go = st.button("Go")
 
 if go:
@@ -110,34 +174,31 @@ if go:
         data = dedupe_and_rank(raw)
 
     if not has_results:
-        st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
+        if selection in REGION_CODES:
+            st.warning(f"There are no 50‑59 1st Degree Women for {selection}.")
+        elif selection == "International":
+            st.warning("There are no 50‑59 1st Degree Women for International.")
+        else:
+            st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
             if rows:
+                df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
                 st.subheader(ev)
-                # Build HTML table
-                table_html = "<table style='width:100%; border-collapse: collapse;'>"
-                table_html += "<tr style='border-bottom:1px solid black;'><th>Rank</th><th>Name</th><th>Points</th><th>Location</th></tr>"
-                for row in rows:
-                    # Each name will have a clickable anchor with a unique key
-                    name_id = f"{ev}-{row['Name']}".replace(" ", "_")
-                    table_html += f"<tr style='border-bottom:1px solid #ddd;'>"
-                    table_html += f"<td>{row['Rank']}</td>"
-                    table_html += f"<td><a href='#{name_id}'>{row['Name']}</a></td>"
-                    table_html += f"<td>{row['Points']}</td>"
-                    table_html += f"<td>{row['Location']}</td>"
-                    table_html += "</tr>"
-                table_html += "</table>"
-                st.markdown(table_html, unsafe_allow_html=True)
-
-                # Display tournament info for each competitor
-                for row in rows:
+                for _, row in df.iterrows():
+                    # Create clickable name using st.markdown with HTML
+                    name_html = f'<a href="#" onclick="window.alert(\''
                     comp_data = sheet_df[
-                        (sheet_df['Name'].apply(lambda x: normalize_name(x)) == normalize_name(row['Name'])) &
+                        (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                         (sheet_df[ev] > 0)
                     ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
                     if not comp_data.empty:
-                        st.markdown(f"<a id='{ev}-{row['Name'].replace(' ','_')}'></a>", unsafe_allow_html=True)
-                        st.markdown(f"**{row['Name']} - {ev} Tournament Results:**")
-                        st.dataframe(comp_data, use_container_width=True)
+                        for _, c in comp_data.iterrows():
+                            name_html += f"{c['Date']} - {c['Tournament']} - {c['Points']} pts\\n"
+                    else:
+                        name_html += "No tournament data for this event."
+                    name_html += '\');">{row["Name"]}</a>'
+                    st.markdown(f'{row["Rank"]}. {name_html} - {row["Points"]} pts - {row["Location"]}', unsafe_allow_html=True)
+else:
+    st.info("Select a region or 'International' and click Go to view standings.")
