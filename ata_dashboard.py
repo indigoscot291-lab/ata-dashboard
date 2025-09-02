@@ -41,6 +41,7 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D"
 WORLD_URL = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 
+# Google Sheet CSV export
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
 
 # --- FUNCTIONS ---
@@ -91,7 +92,7 @@ def parse_standings(html):
                 if pts_val > 0:
                     data[ev_name].append({
                         "Rank": int(rank),
-                        "Name": name.title(),
+                        "Name": name,
                         "Points": pts_val,
                         "Location": loc
                     })
@@ -100,6 +101,7 @@ def parse_standings(html):
 def gather_data(selected):
     combined = {ev: [] for ev in EVENT_NAMES}
 
+    # Always include world standings for international
     world_html = fetch_html(WORLD_URL)
     if world_html:
         world_data = parse_standings(world_html)
@@ -113,7 +115,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -185,20 +187,36 @@ if go:
             rows = data.get(ev, [])
             if rows:
                 df = pd.DataFrame(rows)[["Rank", "Name", "Points", "Location"]]
-                st.subheader(ev)
+
+                # Prepare clickable names with popup
+                display_rows = []
                 for _, row in df.iterrows():
-                    # Create clickable name using st.markdown with HTML
-                    name_html = f'<a href="#" onclick="window.alert(\''
+                    # Filter Google Sheet for this competitor and this event
                     comp_data = sheet_df[
                         (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                         (sheet_df[ev] > 0)
                     ][["Date","Tournament",ev]].rename(columns={ev:"Points"})
+
                     if not comp_data.empty:
-                        for _, c in comp_data.iterrows():
-                            name_html += f"{c['Date']} - {c['Tournament']} - {c['Points']} pts\\n"
+                        popup_text = "\\n".join(f"{r['Date']} - {r['Tournament']} - {r['Points']} pts" for _, r in comp_data.iterrows())
                     else:
-                        name_html += "No tournament data for this event."
-                    name_html += '\');">{row["Name"]}</a>'
-                    st.markdown(f'{row["Rank"]}. {name_html} - {row["Points"]} pts - {row["Location"]}', unsafe_allow_html=True)
+                        popup_text = "No tournament data for this event."
+
+                    name_html = f'<a href="#" onclick="window.alert(\'{popup_text}\');">{row["Name"]}</a>'
+
+                    display_rows.append({
+                        "Rank": row["Rank"],
+                        "Name": name_html,
+                        "Points": row["Points"],
+                        "Location": row["Location"]
+                    })
+
+                display_df = pd.DataFrame(display_rows)
+
+                st.subheader(ev)
+                st.markdown(
+                    display_df.to_html(escape=False, index=False),
+                    unsafe_allow_html=True
+                )
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
