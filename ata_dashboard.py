@@ -112,7 +112,7 @@ def gather_data(selected):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -180,46 +180,53 @@ if go:
         else:
             st.warning("No standings data found for this selection.")
     else:
-        for ev in EVENT_NAMES:
-            rows = data.get(ev, [])
-            if rows:
-                st.subheader(ev)
-                # Table header
-                cols_header = st.columns([1,4,2,1])
-                cols_header[0].write("Rank")
-                cols_header[1].write("Name")
-                cols_header[2].write("Location")
-                cols_header[3].write("Points")
-                # Table rows
-                for row in rows:
-                    cols = st.columns([1,4,2,1])
-                    cols[0].write(row["Rank"])
-                    cols[1].write(row["Name"])
-                    cols[2].write(row["Location"])
-                    cols[3].write(row["Points"])
-
-                # Mobile: show drop-down below the table
-                if mobile == "Yes":
-                    st.write("### Competitor Details")
-                    for row in rows:
-                        with st.expander(f"{row['Name']} ({row['Points']} pts) - {row['Location']}"):
-                            comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                                (sheet_df[ev] > 0)
-                            ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
-                            if not comp_data.empty:
-                                st.dataframe(comp_data, use_container_width=True)
-                            else:
-                                st.write("No tournament data for this event.")
-
-        # Desktop: keep original inline expanders inside the table
-        if mobile == "No":
+        # --- Mobile view ---
+        if mobile == "Yes":
             for ev in EVENT_NAMES:
                 rows = data.get(ev, [])
                 if rows:
-                    st.write(f"### {ev} - Competitor Details")
+                    st.subheader(ev)
+                    cols_header = st.columns([1,4,2,1])
+                    cols_header[0].write("Rank")
+                    cols_header[1].write("Name")
+                    cols_header[2].write("Location")
+                    cols_header[3].write("Points")
                     for row in rows:
-                        with st.expander(f"{row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                        cols = st.columns([1,4,2,1])
+                        cols[0].write(row["Rank"])
+                        cols[1].write(row["Name"])
+                        cols[2].write(row["Location"])
+                        cols[3].write(row["Points"])
+
+            st.write("### Competitor Details")
+            for ev in EVENT_NAMES:
+                rows = data.get(ev, [])
+                for row in rows:
+                    with st.expander(f"{row['Name']} ({row['Points']} pts) - {row['Location']}"):
+                        comp_data = sheet_df[
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
+                            (sheet_df[ev] > 0)
+                        ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
+                        if not comp_data.empty:
+                            st.dataframe(comp_data, use_container_width=True)
+                        else:
+                            st.write("No tournament data for this event.")
+
+        # --- Desktop view ---
+        else:
+            for ev in EVENT_NAMES:
+                rows = data.get(ev, [])
+                if rows:
+                    st.subheader(ev)
+                    cols_header = st.columns([1,4,2,1])
+                    cols_header[0].write("Rank")
+                    cols_header[1].write("Name")
+                    cols_header[2].write("Location")
+                    cols_header[3].write("Points")
+                    for row in rows:
+                        cols = st.columns([1,4,2,1])
+                        cols[0].write(row["Rank"])
+                        with cols[1].expander(row["Name"]):
                             comp_data = sheet_df[
                                 (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                                 (sheet_df[ev] > 0)
@@ -228,5 +235,7 @@ if go:
                                 st.dataframe(comp_data, use_container_width=True)
                             else:
                                 st.write("No tournament data for this event.")
+                        cols[2].write(row["Location"])
+                        cols[3].write(row["Points"])
 else:
     st.info("Select a region or 'International' and click Go to view standings.")
