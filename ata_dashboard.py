@@ -109,7 +109,6 @@ def gather_data(selected_group, selected_region):
     group_info = GROUPS[selected_group]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Always include world standings
     world_html = fetch_html(group_info["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
@@ -123,7 +122,7 @@ def gather_data(selected_group, selected_region):
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -183,7 +182,6 @@ mobile = st.radio("Are you on a mobile device?", ("No", "Yes"))
 selected_group = st.selectbox("Select Group:", list(GROUPS.keys()))
 selected_region = st.selectbox("Select Region:", REGIONS)
 search_name = st.text_input("Search Competitor Name (optional)")
-
 go = st.button("Go")
 
 if go:
@@ -198,10 +196,9 @@ if go:
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
+            if search_name.strip():
+                rows = [r for r in rows if search_name.lower() in r["Name"].lower()]
             if rows:
-                # Apply search filter if provided
-                if search_name.strip():
-                    rows = [r for r in rows if search_name.lower() in r["Name"].lower()]
                 st.subheader(ev)
                 # Table header
                 cols_header = st.columns([1,4,2,1])
@@ -213,17 +210,15 @@ if go:
                 for row in rows:
                     cols = st.columns([1,4,2,1])
                     cols[0].write(row["Rank"])
-                    cols[1].write(row["Name"])
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
-                    # Show breakdown differently for mobile
                     comp_data = sheet_df[
                         (sheet_df['Name'].str.lower() == row['Name'].lower())
                     ][["Date","Tournament"] + EVENT_NAMES + ["Type"]]
                     if not comp_data.empty:
                         if mobile == "No":
-                            with cols[1].expander("Points Breakdown"):
+                            with cols[1].expander(row["Name"]):
                                 st.dataframe(comp_data, use_container_width=True)
                         else:
-                            st.markdown(f"**{row['Name']} Points Breakdown:**")
+                            st.markdown(f"**{row['Name']}**")
                             st.dataframe(comp_data, use_container_width=True)
