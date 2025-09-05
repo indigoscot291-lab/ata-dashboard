@@ -11,15 +11,13 @@ EVENT_NAMES = [
 ]
 
 GROUPS = {
-    "1st Degree Black Belt Women 50-59": {
-        "STATE_URL_TEMPLATE": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D",
-        "WORLD_URL": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
-        "SHEET_URL": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+    "1st Degree Black Belt 50-59 Women": {
+        "state_code": "W01D",
+        "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
     },
-    "2nd/3rd Degree Black Belt Women 40-49": {
-        "STATE_URL_TEMPLATE": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W23C",
-        "WORLD_URL": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
-        "SHEET_URL": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+    "2nd/3rd Degree Black Belt 40-49 Women": {
+        "state_code": "W23C",
+        "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
     }
 }
 
@@ -49,6 +47,9 @@ REGION_CODES = {
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
+STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}"
+WORLD_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={}"
+
 # --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url):
@@ -61,9 +62,9 @@ def fetch_html(url):
     return None
 
 @st.cache_data(ttl=3600)
-def fetch_sheet(sheet_url):
+def fetch_sheet(url):
     try:
-        df = pd.read_csv(sheet_url)
+        df = pd.read_csv(url)
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors='coerce').fillna(0)
@@ -77,7 +78,7 @@ def parse_standings(html):
     headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table")
     for header, table in zip(headers, tables):
-        evt = header.find("span", class_="text-primary text-uppercase")
+        evt = header.find("span", class_="text-primary.text-uppercase")
         if not evt:
             continue
         ev_name = evt.get_text(strip=True)
@@ -103,22 +104,22 @@ def parse_standings(html):
                     })
     return data
 
-def gather_data(selected, group):
+def gather_data(selected, code):
     combined = {ev: [] for ev in EVENT_NAMES}
-    world_html = fetch_html(GROUPS[group]["WORLD_URL"])
+    world_html = fetch_html(WORLD_URL_TEMPLATE.format(code))
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
     if selected not in ["All", "International"]:
-        country, code = REGION_CODES[selected]
-        url = GROUPS[group]["STATE_URL_TEMPLATE"].format(country, code)
+        country, state_code = REGION_CODES[selected]
+        url = STATE_URL_TEMPLATE.format(country, state_code, code)
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries  # only this state
+                combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
@@ -126,8 +127,8 @@ def gather_data(selected, group):
     elif selected == "All":
         any_data = False
         for region in REGION_CODES:
-            country, code = REGION_CODES[region]
-            url = GROUPS[group]["STATE_URL_TEMPLATE"].format(country, code)
+            country, state_code = REGION_CODES[region]
+            url = STATE_URL_TEMPLATE.format(country, state_code, code)
             html = fetch_html(url)
             if html:
                 data = parse_standings(html)
@@ -159,39 +160,40 @@ def dedupe_and_rank(event_data):
             if key not in seen:
                 seen.add(key)
                 unique.append(e)
-        # Assign ranks, ties get same rank
+        # Tie-aware ranking
         unique.sort(key=lambda x: x["Points"], reverse=True)
         rank = 1
-        prev_points = None
-        for idx, row in enumerate(unique):
-            if prev_points is None:
-                row["Rank"] = rank
-            elif row["Points"] == prev_points:
-                row["Rank"] = rank
+        for i, row in enumerate(unique):
+            if i > 0 and row["Points"] == unique[i-1]["Points"]:
+                row["Rank"] = unique[i-1]["Rank"]
             else:
-                rank = idx + 1
                 row["Rank"] = rank
-            prev_points = row["Points"]
+            rank += 1
         clean[ev] = unique
     return clean
 
 # --- STREAMLIT APP ---
 st.title("ATA Tournament Standings")
 
-mobile = st.radio("Are you on a mobile device?", ["No", "Yes"])
-group = st.selectbox("Select Group:", list(GROUPS.keys()))
-selection = st.selectbox("Select Region:", REGIONS)
-go = st.button("Go")
+# Select group
+group_name = st.selectbox("Select Group:", list(GROUPS.keys()))
+group_code = GROUPS[group_name]["state_code"]
+sheet_df = fetch_sheet(GROUPS[group_name]["sheet_url"])
 
-sheet_df = fetch_sheet(GROUPS[group]["SHEET_URL"])
+# Name search box
+name_filter = st.text_input("Search competitor name (case-insensitive):").strip().lower()
+
+# Select region
+selection = st.selectbox("Select region:", REGIONS)
+go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        raw, has_results = gather_data(selection, group)
+        raw, has_results = gather_data(selection, group_code)
         data = dedupe_and_rank(raw)
 
     if not has_results:
-        st.warning(f"No standings data found for {selection}.")
+        st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
@@ -203,24 +205,25 @@ if go:
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
-                # Table rows
+
                 for row in rows:
+                    # Apply name filter
+                    if name_filter and name_filter not in row["Name"].lower():
+                        continue
+
                     cols = st.columns([1,4,2,1])
                     cols[0].write(row["Rank"])
+                    # Name clickable using expander
+                    with cols[1].expander(f"{row['Name']} ({row['Points']} pts - {row['Location']})"):
+                        comp_data = sheet_df[
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) & 
+                            (sheet_df[ev] > 0)
+                        ][["Date","Tournament",ev,"Type"]].rename(columns={ev:"Points"})
+                        if not comp_data.empty:
+                            st.dataframe(comp_data.reset_index(drop=True), use_container_width=True)
+                        else:
+                            st.write("No tournament data for this event.")
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
-
-                    # Show competitor points breakdown
-                    comp_data = sheet_df[
-                        (sheet_df['Name'].str.lower() == row['Name'].lower())
-                    ][["Date","Tournament"] + EVENT_NAMES + ["Type"]]
-                    comp_data = comp_data.reset_index(drop=True)  # remove index
-
-                    if mobile == "No":
-                        with cols[1].expander(row["Name"]):
-                            st.dataframe(comp_data, use_container_width=True)
-                    else:
-                        st.markdown(f"**{row['Name']}**")
-                        st.dataframe(comp_data, use_container_width=True)
 else:
     st.info("Select a region and click Go to view standings.")
