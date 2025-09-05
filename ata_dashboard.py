@@ -12,19 +12,18 @@ EVENT_NAMES = [
 
 GROUPS = {
     "1st Degree Black Belt Women 50-59": {
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+        "STATE_URL_TEMPLATE": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D",
+        "WORLD_URL": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
+        "SHEET_URL": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
     },
-    "2/3 Degree Black Belt Women 40-49": {
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W23C",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+    "2nd/3rd Degree Black Belt Women 40-49": {
+        "STATE_URL_TEMPLATE": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W23C",
+        "WORLD_URL": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
+        "SHEET_URL": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
     }
 }
 
 REGION_CODES = {
-    # US states
     "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
     "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
     "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
@@ -42,7 +41,6 @@ REGION_CODES = {
     "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
     "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
     "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
-    # Canadian provinces
     "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
     "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
     "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
@@ -105,33 +103,31 @@ def parse_standings(html):
                     })
     return data
 
-def gather_data(selected_group, selected_region):
-    group_info = GROUPS[selected_group]
+def gather_data(selected, group):
     combined = {ev: [] for ev in EVENT_NAMES}
-
-    world_html = fetch_html(group_info["world_url"])
+    world_html = fetch_html(GROUPS[group]["WORLD_URL"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    if selected_region not in ["All", "International"]:
-        country, code = REGION_CODES[selected_region]
-        url = group_info["state_url_template"].format(country, code)
+    if selected not in ["All", "International"]:
+        country, code = REGION_CODES[selected]
+        url = GROUPS[group]["STATE_URL_TEMPLATE"].format(country, code)
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
 
-    elif selected_region == "All":
+    elif selected == "All":
         any_data = False
         for region in REGION_CODES:
             country, code = REGION_CODES[region]
-            url = group_info["state_url_template"].format(country, code)
+            url = GROUPS[group]["STATE_URL_TEMPLATE"].format(country, code)
             html = fetch_html(url)
             if html:
                 data = parse_standings(html)
@@ -141,7 +137,7 @@ def gather_data(selected_group, selected_region):
                     any_data = True
         return combined, any_data
 
-    elif selected_region == "International":
+    elif selected == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
@@ -163,41 +159,42 @@ def dedupe_and_rank(event_data):
             if key not in seen:
                 seen.add(key)
                 unique.append(e)
-        # Tie-aware ranking
+        # Assign ranks, ties get same rank
         unique.sort(key=lambda x: x["Points"], reverse=True)
         rank = 1
-        for i, row in enumerate(unique):
-            if i > 0 and row["Points"] == unique[i-1]["Points"]:
-                row["Rank"] = unique[i-1]["Rank"]
-            else:
+        prev_points = None
+        for idx, row in enumerate(unique):
+            if prev_points is None:
                 row["Rank"] = rank
-            rank += 1
+            elif row["Points"] == prev_points:
+                row["Rank"] = rank
+            else:
+                rank = idx + 1
+                row["Rank"] = rank
+            prev_points = row["Points"]
         clean[ev] = unique
     return clean
 
 # --- STREAMLIT APP ---
-st.title("ATA Standings Dashboard")
+st.title("ATA Tournament Standings")
 
-mobile = st.radio("Are you on a mobile device?", ("No", "Yes"))
-selected_group = st.selectbox("Select Group:", list(GROUPS.keys()))
-selected_region = st.selectbox("Select Region:", REGIONS)
-search_name = st.text_input("Search Competitor Name (optional)")
+mobile = st.radio("Are you on a mobile device?", ["No", "Yes"])
+group = st.selectbox("Select Group:", list(GROUPS.keys()))
+selection = st.selectbox("Select Region:", REGIONS)
 go = st.button("Go")
 
-if go:
-    sheet_df = fetch_sheet(GROUPS[selected_group]["sheet_url"])
+sheet_df = fetch_sheet(GROUPS[group]["SHEET_URL"])
 
+if go:
     with st.spinner("Loading standings..."):
-        raw, has_results = gather_data(selected_group, selected_region)
+        raw, has_results = gather_data(selection, group)
         data = dedupe_and_rank(raw)
 
     if not has_results:
-        st.warning("No standings data found for this selection.")
+        st.warning(f"No standings data found for {selection}.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
-            if search_name.strip():
-                rows = [r for r in rows if search_name.lower() in r["Name"].lower()]
             if rows:
                 st.subheader(ev)
                 # Table header
@@ -212,13 +209,18 @@ if go:
                     cols[0].write(row["Rank"])
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
+
+                    # Show competitor points breakdown
                     comp_data = sheet_df[
                         (sheet_df['Name'].str.lower() == row['Name'].lower())
                     ][["Date","Tournament"] + EVENT_NAMES + ["Type"]]
-                    if not comp_data.empty:
-                        if mobile == "No":
-                            with cols[1].expander(row["Name"]):
-                                st.dataframe(comp_data, use_container_width=True)
-                        else:
-                            st.markdown(f"**{row['Name']}**")
+                    comp_data = comp_data.reset_index(drop=True)  # remove index
+
+                    if mobile == "No":
+                        with cols[1].expander(row["Name"]):
                             st.dataframe(comp_data, use_container_width=True)
+                    else:
+                        st.markdown(f"**{row['Name']}**")
+                        st.dataframe(comp_data, use_container_width=True)
+else:
+    st.info("Select a region and click Go to view standings.")
