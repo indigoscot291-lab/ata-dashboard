@@ -178,6 +178,9 @@ def dedupe_and_rank(event_data):
 # --- STREAMLIT APP ---
 st.title("ATA Standings Dashboard")
 
+# Preload both Google Sheets
+sheets_cache = {g: fetch_sheet(cfg["sheet_url"]) for g, cfg in GROUPS.items()}
+
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"], index=0)
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
 selection = st.selectbox("Select region:", REGIONS)
@@ -186,7 +189,7 @@ go = st.button("Go")
 
 if go:
     group_config = GROUPS[group_choice]
-    sheet_df = fetch_sheet(group_config["sheet_url"])
+    sheet_df = sheets_cache[group_choice]  # use preloaded
 
     with st.spinner("Loading standings..."):
         raw, has_results = gather_data(group_config, selection)
@@ -216,7 +219,10 @@ if go:
                                 (sheet_df[ev] > 0)
                             ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                             if not comp_data.empty:
-                                st.dataframe(comp_data.reset_index(drop=True), use_container_width=True)
+                                st.dataframe(
+                                    comp_data.reset_index(drop=True),
+                                    use_container_width=True
+                                )
                             else:
                                 st.write("No tournament data for this event.")
                         cols[2].write(row["Location"])
@@ -230,7 +236,7 @@ if go:
                 if rows:
                     st.subheader(ev)
                     table_df = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
-                    st.dataframe(table_df, use_container_width=True)
+                    st.dataframe(table_df.reset_index(drop=True), use_container_width=True)
                     for row in rows:
                         with st.expander(f"{row['Name']} - {ev}"):
                             comp_data = sheet_df[
@@ -238,6 +244,9 @@ if go:
                                 (sheet_df[ev] > 0)
                             ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
                             if not comp_data.empty:
-                                st.dataframe(comp_data.reset_index(drop=True), use_container_width=True)
+                                st.dataframe(
+                                    comp_data.reset_index(drop=True),
+                                    use_container_width=True
+                                )
                             else:
                                 st.write("No tournament data for this event.")
