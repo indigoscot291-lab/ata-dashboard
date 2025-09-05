@@ -10,16 +10,15 @@ EVENT_NAMES = [
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
-# Two groups
 GROUPS = {
-    "1st Degree Women 50-59": {
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
+    "1st Degree Black Belt Women 50-59": {
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W01D",
+        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
         "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
     },
-    "2nd/3rd Degree Women 40-49": {
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
+    "2/3 Degree Black Belt Women 40-49": {
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code=W23C",
+        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
         "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
     }
 }
@@ -106,31 +105,34 @@ def parse_standings(html):
                     })
     return data
 
-def gather_data(group_config, selected):
+def gather_data(selected_group, selected_region):
+    group_info = GROUPS[selected_group]
     combined = {ev: [] for ev in EVENT_NAMES}
-    world_html = fetch_html(group_config["world_url"])
+
+    # Always include world standings
+    world_html = fetch_html(group_info["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    if selected not in ["All", "International"]:
-        country, code = REGION_CODES[selected]
-        url = group_config["state_url_template"].format(country, code)
+    if selected_region not in ["All", "International"]:
+        country, code = REGION_CODES[selected_region]
+        url = group_info["state_url_template"].format(country, code)
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
 
-    elif selected == "All":
+    elif selected_region == "All":
         any_data = False
         for region in REGION_CODES:
             country, code = REGION_CODES[region]
-            url = group_config["state_url_template"].format(country, code)
+            url = group_info["state_url_template"].format(country, code)
             html = fetch_html(url)
             if html:
                 data = parse_standings(html)
@@ -140,7 +142,7 @@ def gather_data(group_config, selected):
                     any_data = True
         return combined, any_data
 
-    elif selected == "International":
+    elif selected_region == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
@@ -162,91 +164,66 @@ def dedupe_and_rank(event_data):
             if key not in seen:
                 seen.add(key)
                 unique.append(e)
-        # Sort & handle ties
+        # Tie-aware ranking
         unique.sort(key=lambda x: x["Points"], reverse=True)
-        last_points, last_rank = None, 0
-        for idx, row in enumerate(unique, start=1):
-            if row["Points"] == last_points:
-                row["Rank"] = last_rank
+        rank = 1
+        for i, row in enumerate(unique):
+            if i > 0 and row["Points"] == unique[i-1]["Points"]:
+                row["Rank"] = unique[i-1]["Rank"]
             else:
-                row["Rank"] = idx
-                last_rank = idx
-                last_points = row["Points"]
+                row["Rank"] = rank
+            rank += 1
         clean[ev] = unique
     return clean
 
 # --- STREAMLIT APP ---
 st.title("ATA Standings Dashboard")
 
-# Preload both Google Sheets
-sheets_cache = {g: fetch_sheet(cfg["sheet_url"]) for g, cfg in GROUPS.items()}
+mobile = st.radio("Are you on a mobile device?", ("No", "Yes"))
+selected_group = st.selectbox("Select Group:", list(GROUPS.keys()))
+selected_region = st.selectbox("Select Region:", REGIONS)
+search_name = st.text_input("Search Competitor Name (optional)")
 
-is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"], index=0)
-group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-selection = st.selectbox("Select region:", REGIONS)
-search_query = st.text_input("Search competitor name (optional):")
 go = st.button("Go")
 
 if go:
-    group_config = GROUPS[group_choice]
-    sheet_df = sheets_cache[group_choice]  # use preloaded
+    sheet_df = fetch_sheet(GROUPS[selected_group]["sheet_url"])
 
     with st.spinner("Loading standings..."):
-        raw, has_results = gather_data(group_config, selection)
+        raw, has_results = gather_data(selected_group, selected_region)
         data = dedupe_and_rank(raw)
 
     if not has_results:
         st.warning("No standings data found for this selection.")
     else:
-        if is_mobile == "No":  # Desktop
-            for ev in EVENT_NAMES:
-                rows = data.get(ev, [])
-                if search_query:
-                    rows = [r for r in rows if search_query.lower() in r["Name"].lower()]
-                if rows:
-                    st.subheader(ev)
-                    cols_header = st.columns([1,4,2,1])
-                    cols_header[0].write("Rank")
-                    cols_header[1].write("Name")
-                    cols_header[2].write("Location")
-                    cols_header[3].write("Points")
-                    for row in rows:
-                        cols = st.columns([1,4,2,1])
-                        cols[0].write(row["Rank"])
-                        with cols[1].expander(row["Name"]):
-                            comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                                (sheet_df[ev] > 0)
-                            ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
-                            if not comp_data.empty:
-                                st.dataframe(
-                                    comp_data.reset_index(drop=True),
-                                    use_container_width=True
-                                )
-                            else:
-                                st.write("No tournament data for this event.")
-                        cols[2].write(row["Location"])
-                        cols[3].write(row["Points"])
-
-        else:  # Mobile
-            for ev in EVENT_NAMES:
-                rows = data.get(ev, [])
-                if search_query:
-                    rows = [r for r in rows if search_query.lower() in r["Name"].lower()]
-                if rows:
-                    st.subheader(ev)
-                    table_df = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
-                    st.dataframe(table_df.reset_index(drop=True), use_container_width=True)
-                    for row in rows:
-                        with st.expander(f"{row['Name']} - {ev}"):
-                            comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                                (sheet_df[ev] > 0)
-                            ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
-                            if not comp_data.empty:
-                                st.dataframe(
-                                    comp_data.reset_index(drop=True),
-                                    use_container_width=True
-                                )
-                            else:
-                                st.write("No tournament data for this event.")
+        for ev in EVENT_NAMES:
+            rows = data.get(ev, [])
+            if rows:
+                # Apply search filter if provided
+                if search_name.strip():
+                    rows = [r for r in rows if search_name.lower() in r["Name"].lower()]
+                st.subheader(ev)
+                # Table header
+                cols_header = st.columns([1,4,2,1])
+                cols_header[0].write("Rank")
+                cols_header[1].write("Name")
+                cols_header[2].write("Location")
+                cols_header[3].write("Points")
+                # Table rows
+                for row in rows:
+                    cols = st.columns([1,4,2,1])
+                    cols[0].write(row["Rank"])
+                    cols[1].write(row["Name"])
+                    cols[2].write(row["Location"])
+                    cols[3].write(row["Points"])
+                    # Show breakdown differently for mobile
+                    comp_data = sheet_df[
+                        (sheet_df['Name'].str.lower() == row['Name'].lower())
+                    ][["Date","Tournament"] + EVENT_NAMES + ["Type"]]
+                    if not comp_data.empty:
+                        if mobile == "No":
+                            with cols[1].expander("Points Breakdown"):
+                                st.dataframe(comp_data, use_container_width=True)
+                        else:
+                            st.markdown(f"**{row['Name']} Points Breakdown:**")
+                            st.dataframe(comp_data, use_container_width=True)
