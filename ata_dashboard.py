@@ -11,17 +11,18 @@ EVENT_NAMES = [
 ]
 
 GROUPS = {
-    "1st Degree Black Belt 50-59 Women": {
+    "1st Degree Black Belt Women 50-59": {
         "state_code": "W01D",
         "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
     },
-    "2nd/3rd Degree Black Belt 40-49 Women": {
+    "2nd/3rd Degree Black Belt Women 40-49": {
         "state_code": "W23C",
         "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
     }
 }
 
 REGION_CODES = {
+    # US states
     "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
     "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
     "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
@@ -39,6 +40,7 @@ REGION_CODES = {
     "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
     "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
     "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
+    # Canadian provinces
     "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
     "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
     "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
@@ -62,9 +64,9 @@ def fetch_html(url):
     return None
 
 @st.cache_data(ttl=3600)
-def fetch_sheet(url):
+def fetch_sheet(sheet_url):
     try:
-        df = pd.read_csv(url)
+        df = pd.read_csv(sheet_url)
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors='coerce').fillna(0)
@@ -78,7 +80,7 @@ def parse_standings(html):
     headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table")
     for header, table in zip(headers, tables):
-        evt = header.find("span", class_="text-primary.text-uppercase")
+        evt = header.find("span", class_="text-primary text-uppercase")
         if not evt:
             continue
         ev_name = evt.get_text(strip=True)
@@ -104,18 +106,18 @@ def parse_standings(html):
                     })
     return data
 
-def gather_data(selected, code):
+def gather_data(selected_region, group_code):
     combined = {ev: [] for ev in EVENT_NAMES}
-    world_html = fetch_html(WORLD_URL_TEMPLATE.format(code))
+    # Worlds first
+    world_html = fetch_html(WORLD_URL_TEMPLATE.format(group_code))
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    if selected not in ["All", "International"]:
-        country, state_code = REGION_CODES[selected]
-        url = STATE_URL_TEMPLATE.format(country, state_code, code)
-        html = fetch_html(url)
+    if selected_region not in ["All", "International"]:
+        country, code = REGION_CODES[selected_region]
+        html = fetch_html(STATE_URL_TEMPLATE.format(country, code, group_code))
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
@@ -123,13 +125,11 @@ def gather_data(selected, code):
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
-
-    elif selected == "All":
+    elif selected_region == "All":
         any_data = False
         for region in REGION_CODES:
-            country, state_code = REGION_CODES[region]
-            url = STATE_URL_TEMPLATE.format(country, state_code, code)
-            html = fetch_html(url)
+            country, code = REGION_CODES[region]
+            html = fetch_html(STATE_URL_TEMPLATE.format(country, code, group_code))
             if html:
                 data = parse_standings(html)
                 for ev, entries in data.items():
@@ -137,8 +137,7 @@ def gather_data(selected, code):
                 if any(len(lst) > 0 for lst in data.values()):
                     any_data = True
         return combined, any_data
-
-    elif selected == "International":
+    elif selected_region == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
@@ -147,7 +146,6 @@ def gather_data(selected, code):
         combined = intl
         has_any = any(len(lst) > 0 for lst in combined.values())
         return combined, has_any
-
     return combined, False
 
 def dedupe_and_rank(event_data):
@@ -160,15 +158,21 @@ def dedupe_and_rank(event_data):
             if key not in seen:
                 seen.add(key)
                 unique.append(e)
-        # Tie-aware ranking
+        # Sort by points descending
         unique.sort(key=lambda x: x["Points"], reverse=True)
+        # Assign ranks with ties
         rank = 1
+        prev_points = None
+        skip = 0
         for i, row in enumerate(unique):
-            if i > 0 and row["Points"] == unique[i-1]["Points"]:
-                row["Rank"] = unique[i-1]["Rank"]
+            if prev_points is None or row["Points"] != prev_points:
+                rank += skip
+                row["Rank"] = rank
+                skip = 1
             else:
                 row["Rank"] = rank
-            rank += 1
+                skip += 1
+            prev_points = row["Points"]
         clean[ev] = unique
     return clean
 
@@ -180,11 +184,12 @@ group_name = st.selectbox("Select Group:", list(GROUPS.keys()))
 group_code = GROUPS[group_name]["state_code"]
 sheet_df = fetch_sheet(GROUPS[group_name]["sheet_url"])
 
-# Name search box
-name_filter = st.text_input("Search competitor name (case-insensitive):").strip().lower()
-
 # Select region
 selection = st.selectbox("Select region:", REGIONS)
+
+# Optional name search (group-agnostic)
+name_filter = st.text_input("Search competitor name (optional, case-insensitive):").strip().lower()
+
 go = st.button("Go")
 
 if go:
@@ -207,7 +212,7 @@ if go:
                 cols_header[3].write("Points")
 
                 for row in rows:
-                    # Apply name filter
+                    # Apply name filter only if something is typed
                     if name_filter and name_filter not in row["Name"].lower():
                         continue
 
@@ -216,7 +221,7 @@ if go:
                     # Name clickable using expander
                     with cols[1].expander(f"{row['Name']} ({row['Points']} pts - {row['Location']})"):
                         comp_data = sheet_df[
-                            (sheet_df['Name'].str.lower() == row['Name'].lower()) & 
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                             (sheet_df[ev] > 0)
                         ][["Date","Tournament",ev,"Type"]].rename(columns={ev:"Points"})
                         if not comp_data.empty:
