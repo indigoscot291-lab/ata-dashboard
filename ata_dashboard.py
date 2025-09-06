@@ -66,7 +66,6 @@ def fetch_html(url):
 def fetch_sheet(url):
     try:
         df = pd.read_csv(url)
-        # ensure numeric event cols exist and are numeric
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
@@ -110,14 +109,12 @@ def gather_data(group_key, selected_region):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Fetch world standings first (useful for international fill-ins)
     world_html = fetch_html(group["world_url"])
     if world_html:
         wdata = parse_standings(world_html)
         for ev, entries in wdata.items():
             combined[ev].extend(entries)
 
-    # Specific state/province selected
     if selected_region not in ["All", "International"]:
         if selected_region not in REGION_CODES:
             return combined, False
@@ -126,14 +123,12 @@ def gather_data(group_key, selected_region):
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
-            # For a single-state selection replace combined with that state's entries
             for ev, entries in state_data.items():
                 combined[ev] = entries
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
 
-    # "All": iterate and append
     if selected_region == "All":
         any_data = False
         for region_name, (country, state_code) in REGION_CODES.items():
@@ -148,7 +143,6 @@ def gather_data(group_key, selected_region):
                 any_data = True
         return combined, any_data
 
-    # International: keep only entries whose Location doesn't end with ", XX"
     if selected_region == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -170,9 +164,7 @@ def dedupe_and_rank(event_data):
             if key not in seen:
                 seen.add(key)
                 uniq.append(e)
-        # sort desc by Points, then Name for deterministic order
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        # assign ranks with ties (1,2,2,4)
         processed = 0
         prev_points = None
         prev_rank = None
@@ -188,22 +180,15 @@ def dedupe_and_rank(event_data):
         clean[ev] = uniq
     return clean
 
-
 # --- STREAMLIT UI ---
-st.title("ATA Standings Dashboard (states/provinces → All / International included)")
+st.title("ATA Standings Dashboard")
 
-# <-- re-added mobile control as requested -->
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
-
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
 region_choice = st.selectbox("Select region:", REGIONS)
-
-# name search (optional) — placed under region
 name_filter = st.text_input("Search competitor name (optional)").strip().lower()
 
-# load sheet for the chosen group (if available)
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-
 go = st.button("Go")
 
 if go:
@@ -216,44 +201,56 @@ if go:
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
-            # apply search filter if provided
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
             if not rows:
                 continue
 
             st.subheader(ev)
-            # table header — wider name/location columns to reduce wrapping
-            cols_header = st.columns([1,5,3,2])
-            cols_header[0].write("Rank")
-            cols_header[1].write("Name")
-            cols_header[2].write("Location")
-            cols_header[3].write("Points")
 
-            # rows
-            for row in rows:
-                cols = st.columns([1,5,3,2])
-                cols[0].write(row["Rank"])
+            # --- MOBILE ---
+            if is_mobile:
+                # Show main table
+                main_table = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
+                st.table(main_table)
 
-                # Desktop: expander per name (expander header = name only)
-                if not is_mobile:
+                # Show breakdowns underneath
+                for row in rows:
+                    st.markdown(f"**{row['Name']}**")
+                    if not sheet_df.empty and ev in sheet_df.columns:
+                        comp_data = sheet_df[
+                            (sheet_df['Name'].str.lower() == row['Name'].lower()) &
+                            (sheet_df[ev] > 0)
+                        ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
+                        if not comp_data.empty:
+                            st.table(comp_data.reset_index(drop=True))
+                        else:
+                            st.write("No tournament data for this event.")
+                    else:
+                        st.write("No tournament data available.")
+
+            # --- DESKTOP ---
+            else:
+                cols_header = st.columns([1,5,3,2])
+                cols_header[0].write("Rank")
+                cols_header[1].write("Name")
+                cols_header[2].write("Location")
+                cols_header[3].write("Points")
+
+                for row in rows:
+                    cols = st.columns([1,5,3,2])
+                    cols[0].write(row["Rank"])
                     with cols[1].expander(row["Name"]):
-                        # select breakdown from sheet_df (case-insensitive match), include Type
                         if not sheet_df.empty and ev in sheet_df.columns:
                             comp_data = sheet_df[
                                 (sheet_df['Name'].str.lower() == row['Name'].lower()) &
                                 (sheet_df[ev] > 0)
                             ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
                             if not comp_data.empty:
-                                # convert to records to ensure no index column is shown
-                                st.table(comp_data.reset_index(drop=True).to_dict("records"))
+                                st.table(comp_data.reset_index(drop=True))
                             else:
                                 st.write("No tournament data for this event.")
                         else:
-                            st.write("No tournament data available (sheet missing or event column absent).")
-                else:
-                    # Mobile: show name inline (no expander) — keep identical table layout, user can still view breakdown separately
-                    cols[1].write(row["Name"])
-
-                cols[2].write(row["Location"])
-                cols[3].write(row["Points"])
+                            st.write("No tournament data available.")
+                    cols[2].write(row["Location"])
+                    cols[3].write(row["Points"])
