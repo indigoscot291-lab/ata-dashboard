@@ -10,22 +10,8 @@ EVENT_NAMES = [
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
 ]
 
-GROUPS = {
-    "1st Degree Black Belt Women 50-59": {
-        "code": "W01D",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
-    },
-    "2nd/3rd Degree Black Belt Women 40-49": {
-        "code": "W23C",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
-    }
-}
-
 REGION_CODES = {
+    # US states
     "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
     "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
     "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
@@ -52,27 +38,36 @@ REGION_CODES = {
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
-# --- HELPERS ---
+STATE_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}"
+WORLD_URL_TEMPLATE = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={}"
+
+SHEET_URLS = {
+    "1st Degree Black Belt 50-59": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv",
+    "2/3 Degree Black Belt 40-49": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+}
+
+GROUPS = list(SHEET_URLS.keys())
+
+# --- FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url):
     try:
-        r = requests.get(url, timeout=12)
+        r = requests.get(url, timeout=10)
         if r.status_code == 200:
             return r.text
-    except Exception:
-        return None
+    except:
+        pass
     return None
 
 @st.cache_data(ttl=3600)
 def fetch_sheet(sheet_url):
     try:
         df = pd.read_csv(sheet_url)
-        # ensure numeric event cols exist and are numeric
         for ev in EVENT_NAMES:
             if ev in df.columns:
-                df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
+                df[ev] = pd.to_numeric(df[ev], errors='coerce').fillna(0)
         return df
-    except Exception:
+    except:
         return pd.DataFrame()
 
 def parse_standings(html):
@@ -93,185 +88,140 @@ def parse_standings(html):
         for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
             if len(cols) == 4 and all(cols):
-                rank_s, name, pts_s, loc = cols
+                rank, name, pts, loc = cols
                 try:
-                    pts_val = int(pts_s)
-                except Exception:
+                    pts_val = int(pts)
+                except:
                     continue
                 if pts_val > 0:
                     data[ev_name].append({
-                        "Rank": int(rank_s),
+                        "Rank": int(rank),
                         "Name": name.strip(),
                         "Points": pts_val,
-                        "Location": loc.strip()
+                        "Location": loc
                     })
     return data
 
-def gather_data(group_key, selected_region):
-    group = GROUPS[group_key]
+def gather_data(group, selected):
     combined = {ev: [] for ev in EVENT_NAMES}
-
-    # fetch world (useful for International/international fill-ins)
-    world_html = fetch_html(group["world_url"])
+    code = "W01D" if group == "1st Degree Black Belt 50-59" else "W23C"
+    # World
+    world_html = fetch_html(WORLD_URL_TEMPLATE.format(code))
     if world_html:
-        wdata = parse_standings(world_html)
-        for ev, entries in wdata.items():
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
             combined[ev].extend(entries)
-
-    # specific state/province selection
-    if selected_region not in ["All", "International"]:
-        if selected_region not in REGION_CODES:
-            return combined, False
-        country, state_code = REGION_CODES[selected_region]
-        url = group["state_url_template"].format(country, state_code, group["code"])
+    # State/Province
+    if selected not in ["All", "International"]:
+        country, state_code = REGION_CODES[selected]
+        url = STATE_URL_TEMPLATE.format(country, state_code, code)
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
-            # replace combined with this state's lists
             for ev, entries in state_data.items():
-                combined[ev] = entries
+                combined[ev] = entries  # only this state
             return combined, any(len(lst) > 0 for lst in state_data.values())
         else:
             return combined, False
-
-    # All: iterate and append
-    if selected_region == "All":
+    elif selected == "All":
         any_data = False
-        for region_name, (country, state_code) in REGION_CODES.items():
-            url = group["state_url_template"].format(country, state_code, group["code"])
+        for region in REGION_CODES:
+            country, state_code = REGION_CODES[region]
+            url = STATE_URL_TEMPLATE.format(country, state_code, code)
             html = fetch_html(url)
-            if not html:
-                continue
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
-                combined[ev].extend(entries)
-            if any(len(lst) > 0 for lst in state_data.values()):
-                any_data = True
+            if html:
+                data = parse_standings(html)
+                for ev, entries in data.items():
+                    combined[ev].extend(entries)
+                if any(len(lst) > 0 for lst in data.values()):
+                    any_data = True
         return combined, any_data
-
-    # International: filter combined entries to those whose Location doesn't end with ", XX"
-    if selected_region == "International":
+    elif selected == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
                 if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
                     intl[ev].append(e)
-        has_any = any(len(lst) > 0 for lst in intl.values())
-        return intl, has_any
-
+        combined = intl
+        has_any = any(len(lst) > 0 for lst in combined.values())
+        return combined, has_any
     return combined, False
 
 def dedupe_and_rank(event_data):
     clean = {}
     for ev, entries in event_data.items():
         seen = set()
-        uniq = []
+        unique = []
         for e in entries:
             key = (e["Name"].lower(), e["Location"], e["Points"])
             if key not in seen:
                 seen.add(key)
-                uniq.append(e)
-        # sort desc by Points, then Name for deterministic order
-        uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        # assign ranks with ties (1,2,2,4)
-        processed = 0
-        prev_points = None
-        prev_rank = None
-        for item in uniq:
-            processed += 1
-            if prev_points is None or item["Points"] != prev_points:
-                rank = processed
-                prev_rank = rank
+                unique.append(e)
+        # Sort by points
+        unique.sort(key=lambda x: x["Points"], reverse=True)
+        # Assign ranks with ties
+        rank = 1
+        for i, row in enumerate(unique):
+            if i > 0 and row["Points"] == unique[i-1]["Points"]:
+                row["Rank"] = unique[i-1]["Rank"]
             else:
-                rank = prev_rank
-            item["Rank"] = rank
-            prev_points = item["Points"]
-        clean[ev] = uniq
+                row["Rank"] = rank
+            rank += 1
+        clean[ev] = unique
     return clean
 
-# --- STREAMLIT UI ---
+# --- STREAMLIT APP ---
 st.title("ATA Standings Dashboard")
 
-# Mobile radio (kept)
-is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+is_mobile = st.radio("Are you on a mobile device?", ("No", "Yes"))
 
-# Group selection (kept)
-group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
+group = st.selectbox("Select Group:", GROUPS)
+sheet_df = fetch_sheet(SHEET_URLS[group])
 
-# Region selection (kept)
-region_choice = st.selectbox("Select region:", REGIONS)
+selected = st.selectbox("Select region:", REGIONS)
 
-# Name search (optional) under region (kept)
-name_filter = st.text_input("Search competitor name (optional)").strip().lower()
-
-# Load spreadsheet for chosen group (may be empty)
-sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+name_search = st.text_input("Search competitor name (optional):").strip().lower()
 
 go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        raw_data, has = gather_data(group_choice, region_choice)
-        data = dedupe_and_rank(raw_data)
+        raw, has_results = gather_data(group, selected)
+        data = dedupe_and_rank(raw)
 
-    if not has:
-        st.warning(f"No standings found for {region_choice}.")
+    if not has_results:
+        st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
-            # apply name filter if provided
-            if name_filter:
-                rows = [r for r in rows if name_filter in r["Name"].lower()]
-            if not rows:
-                continue
-
-            st.subheader(ev)
-
-            # --- MOBILE: show table first, then per-competitor expanders underneath the table ---
-            if is_mobile:
-                # main table displayed without index (convert to records)
-                main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
-                st.table(main_df.reset_index(drop=True).to_dict("records"))
-
-                # competitor dropdowns under the table — one expander per competitor
-                for row in rows:
-                    # expander header = competitor name ONLY
-                    with st.expander(row["Name"]):
-                        if not sheet_df.empty and ev in sheet_df.columns:
-                            comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                                (sheet_df[ev] > 0)
-                            ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                            if not comp_data.empty:
-                                # convert to records to remove index column
-                                st.table(comp_data.reset_index(drop=True).to_dict("records"))
-                            else:
-                                st.write("No tournament data for this event.")
-                        else:
-                            st.write("No tournament data available.")
-            # --- DESKTOP: unchanged — table with expanders inside table (kept behavior) ---
-            else:
-                cols_header = st.columns([1,5,3,2])
+            if name_search:
+                rows = [r for r in rows if name_search in r["Name"].lower()]
+            if rows:
+                st.subheader(ev)
+                # Table header
+                cols_header = st.columns([1,4,2,1])
                 cols_header[0].write("Rank")
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
 
                 for row in rows:
-                    cols = st.columns([1,5,3,2])
+                    cols = st.columns([1,4,2,1])
                     cols[0].write(row["Rank"])
-                    # expander inside the name column, header is name only
-                    with cols[1].expander(row["Name"]):
-                        if not sheet_df.empty and ev in sheet_df.columns:
-                            comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower() == row['Name'].lower()) &
-                                (sheet_df[ev] > 0)
-                            ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                            if not comp_data.empty:
-                                st.table(comp_data.reset_index(drop=True).to_dict("records"))
-                            else:
-                                st.write("No tournament data for this event.")
-                        else:
-                            st.write("No tournament data available.")
+                    cols[1].write(row["Name"])
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
+
+                    # Dropdown with tournament breakdown
+                    comp_data = sheet_df[
+                        (sheet_df['Name'].str.lower() == row['Name'].lower()) & 
+                        (sheet_df[ev] > 0)
+                    ][["Date","Tournament","Type",ev]].rename(columns={ev:"Points"})
+                    if not comp_data.empty:
+                        comp_data = comp_data.reset_index(drop=True)
+                        if is_mobile == "No":
+                            with st.expander(f"{row['Name']} points breakdown"):
+                                st.dataframe(comp_data, use_container_width=True, hide_index=True)
+                        else:
+                            st.write(f"Points breakdown for {row['Name']}:")
+                            st.dataframe(comp_data, use_container_width=True, hide_index=True)
