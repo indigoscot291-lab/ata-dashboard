@@ -56,28 +56,6 @@ REGION_CODES = {
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
-# --- DISTRICT CONFIG ---
-DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
-
-@st.cache_data(ttl=3600)
-def fetch_district_sheet():
-    try:
-        df = pd.read_csv(DISTRICT_SHEET_URL)
-        # build mapping: district -> list of states/provinces
-        district_map = {}
-        for _, row in df.iterrows():
-            district = row['District']
-            state = row['States and Provinces']
-            if pd.isna(district) or pd.isna(state):
-                continue
-            district_map.setdefault(district, []).append(state)
-        return district_map
-    except Exception:
-        return {}
-
-district_map = fetch_district_sheet()
-DISTRICTS = ["All"] + sorted(district_map.keys())
-
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
@@ -93,6 +71,7 @@ def fetch_html(url: str):
 def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(sheet_url)
+        # ensure numeric event cols exist and are numeric
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
@@ -136,13 +115,15 @@ def gather_data(group_key: str, selected_region: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
+    # Fetch world standings first (helps fill international)
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    if selected_region not in ["All", "International"]:
+    # If a specific state/province selected -> use only that state's page
+    if selected_region not in ["All", "International", ""]:
         if selected_region not in REGION_CODES:
             return combined, False
         country, state_code = REGION_CODES[selected_region]
@@ -156,6 +137,7 @@ def gather_data(group_key: str, selected_region: str):
         else:
             return combined, False
 
+    # If "All", iterate through regions and append
     if selected_region == "All":
         any_data = False
         for region_name, (country, state_code) in REGION_CODES.items():
@@ -170,6 +152,7 @@ def gather_data(group_key: str, selected_region: str):
                 any_data = True
         return combined, any_data
 
+    # If International: keep only entries whose Location doesn't end with ", XX"
     if selected_region == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -179,9 +162,14 @@ def gather_data(group_key: str, selected_region: str):
         has_any = any(len(lst) > 0 for lst in intl.values())
         return intl, has_any
 
+    # If blank (after district selection), include all in selected list
+    if selected_region == "":
+        return combined, any(len(lst) > 0 for lst in combined.values())
+
     return combined, False
 
 def dedupe_and_rank(event_data: dict):
+    """Dedupe and assign ranks. Ties get the same rank; next rank skips."""
     clean = {}
     for ev, entries in event_data.items():
         seen = set()
@@ -210,39 +198,63 @@ def dedupe_and_rank(event_data: dict):
 # --- UI ---
 st.title("ATA Standings Dashboard")
 
+# Mobile radio
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
+# Group selector
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
 
-# District selector
-district_choice = st.selectbox("Select District (optional):", DISTRICTS)
+# Load Google Sheet
+sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
-# Region selector filtered by district
+# Load district sheet
+district_df = pd.read_csv("https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv")
+district_map = {}
+for _, row in district_df.iterrows():
+    district = row['District']
+    state = row['States and Provinces']
+    if pd.isna(district) or pd.isna(state):
+        continue
+    district_map.setdefault(district, []).append(state)
+
+# District selector
+district_choice = st.selectbox("Select district:", ["All"] + sorted(district_map.keys()))
+
+# Region selector
 if district_choice == "All":
     region_options = REGIONS
 else:
-    region_options = ["All"] + district_map.get(district_choice, [])
-region_choice = st.selectbox("Select region:", region_options)
+    region_options = district_map[district_choice]
 
-# Check for invalid combination
-if district_choice != "All" and region_choice not in ["All"] + district_map.get(district_choice, []):
-    st.warning(f"Selected region '{region_choice}' is not in the district '{district_choice}'.")
-    st.stop()
+region_choice = st.selectbox("Select region:", [""] + region_options, index=0)
 
 # Name search
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
-sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-
+# Go button
 go = st.button("Go")
 
 if go:
+    # Determine regions to process
+    if district_choice != "All" and region_choice == "":
+        selected_regions = district_map[district_choice]
+    else:
+        selected_regions = [region_choice]
+
     with st.spinner("Loading standings..."):
-        raw_data, has_results = gather_data(group_choice, region_choice)
-        data = dedupe_and_rank(raw_data)
+        combined = {ev: [] for ev in EVENT_NAMES}
+        has_results = False
+        for region in selected_regions:
+            raw_data, region_has = gather_data(group_choice, region)
+            for ev in EVENT_NAMES:
+                combined[ev].extend(raw_data.get(ev, []))
+            if region_has:
+                has_results = True
+
+        data = dedupe_and_rank(combined)
 
     if not has_results:
-        st.warning(f"No standings data found for {region_choice}.")
+        st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
