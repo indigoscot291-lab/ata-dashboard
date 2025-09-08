@@ -29,7 +29,6 @@ GROUPS = {
 }
 
 REGION_CODES = {
-    # US states
     "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
     "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
     "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
@@ -110,53 +109,36 @@ def parse_standings(html: str):
                     })
     return data
 
-def gather_data(group_key: str, selected_region: str):
+def gather_data(group_key: str, selected_region_list):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
+
+    # Fetch world standings first
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    if selected_region not in ["All", "International"]:
-        if selected_region not in REGION_CODES:
-            return combined, False
-        country, state_code = REGION_CODES[selected_region]
+    # If no regions (empty list), include all
+    if not selected_region_list:
+        selected_region_list = list(REGION_CODES.keys())
+
+    any_data = False
+    for region in selected_region_list:
+        if region not in REGION_CODES:
+            continue
+        country, state_code = REGION_CODES[region]
         url = group["state_url_template"].format(country, state_code, group["code"])
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
-                combined[ev] = entries
-            return combined, any(len(lst) > 0 for lst in state_data.values())
-        else:
-            return combined, False
-
-    if selected_region == "All":
-        any_data = False
-        for region_name, (country, state_code) in REGION_CODES.items():
-            url = group["state_url_template"].format(country, state_code, group["code"])
-            html = fetch_html(url)
-            if not html:
-                continue
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
                 combined[ev].extend(entries)
             if any(len(lst) > 0 for lst in state_data.values()):
                 any_data = True
-        return combined, any_data
 
-    if selected_region == "International":
-        intl = {ev: [] for ev in EVENT_NAMES}
-        for ev, entries in combined.items():
-            for e in entries:
-                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
-                    intl[ev].append(e)
-        has_any = any(len(lst) > 0 for lst in intl.values())
-        return intl, has_any
-
-    return combined, False
+    return combined, any_data
 
 def dedupe_and_rank(event_data: dict):
     clean = {}
@@ -189,38 +171,51 @@ def dedupe_and_rank(event_data: dict):
 # --- UI ---
 st.title("ATA Standings Dashboard")
 
+# Mobile choice
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
+# Group selector
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
 
-# --- District search ---
+# Optional District selector
 district_df = pd.read_csv("https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv")
-DISTRICTS = [""] + sorted(district_df['District'].dropna().unique())
-district_choice = st.selectbox("Select district (optional):", DISTRICTS)
+district_choice = st.selectbox("Select district (optional):", [""] + sorted(district_df['District'].dropna().unique()))
 
-# Build region options based on district selection
+# Region selector
 if district_choice:
+    # Only show states/provinces in that district, one per line, add blank at top
     region_list = district_df[district_df['District'] == district_choice]['States and Provinces'].dropna().tolist()
-    # Split comma-separated entries and flatten
     region_list = [r.strip() for regions in region_list for r in regions.split(",")]
+    region_list = [""] + region_list
     region_choice = st.selectbox("Select region (optional):", region_list)
 else:
     region_choice = st.selectbox("Select region:", REGIONS)
 
+# Name search
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
+# Load Google Sheet
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
+# Go button
 go = st.button("Go")
 
 if go:
-    selected_region = region_choice if region_choice else "All"
+    # Determine selected regions for data fetch
+    if district_choice and not region_choice:
+        # blank region -> use all regions in district
+        selected_region_list = [r.strip() for regions in district_df[district_df['District'] == district_choice]['States and Provinces'].dropna().tolist() for r in regions.split(",")]
+    elif region_choice:
+        selected_region_list = [region_choice]
+    else:
+        selected_region_list = []
+
     with st.spinner("Loading standings..."):
-        raw_data, has_results = gather_data(group_choice, selected_region)
+        raw_data, has_results = gather_data(group_choice, selected_region_list)
         data = dedupe_and_rank(raw_data)
 
     if not has_results:
-        st.warning(f"No standings data found for {selected_region}.")
+        st.warning("No standings data found for this selection.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
@@ -230,11 +225,9 @@ if go:
                 continue
 
             st.subheader(ev)
-
             if is_mobile:
                 main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
                 st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-
                 for row in rows:
                     with st.expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
@@ -254,7 +247,6 @@ if go:
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
-
                 for row in rows:
                     cols = st.columns([1,5,3,2])
                     cols[0].write(row["Rank"])
