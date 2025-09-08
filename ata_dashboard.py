@@ -56,6 +56,28 @@ REGION_CODES = {
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
+# --- DISTRICT CONFIG ---
+DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
+
+@st.cache_data(ttl=3600)
+def fetch_district_sheet():
+    try:
+        df = pd.read_csv(DISTRICT_SHEET_URL)
+        # build mapping: district -> list of states/provinces
+        district_map = {}
+        for _, row in df.iterrows():
+            district = row['District']
+            state = row['States and Provinces']
+            if pd.isna(district) or pd.isna(state):
+                continue
+            district_map.setdefault(district, []).append(state)
+        return district_map
+    except Exception:
+        return {}
+
+district_map = fetch_district_sheet()
+DISTRICTS = ["All"] + sorted(district_map.keys())
+
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
@@ -71,7 +93,6 @@ def fetch_html(url: str):
 def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(sheet_url)
-        # ensure numeric event cols exist and are numeric
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
@@ -115,14 +136,12 @@ def gather_data(group_key: str, selected_region: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Fetch world standings first (helps fill international)
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # If a specific state/province selected -> use only that state's page
     if selected_region not in ["All", "International"]:
         if selected_region not in REGION_CODES:
             return combined, False
@@ -137,7 +156,6 @@ def gather_data(group_key: str, selected_region: str):
         else:
             return combined, False
 
-    # If "All", iterate through regions and append
     if selected_region == "All":
         any_data = False
         for region_name, (country, state_code) in REGION_CODES.items():
@@ -152,7 +170,6 @@ def gather_data(group_key: str, selected_region: str):
                 any_data = True
         return combined, any_data
 
-    # If International: keep only entries whose Location doesn't end with ", XX"
     if selected_region == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -165,7 +182,6 @@ def gather_data(group_key: str, selected_region: str):
     return combined, False
 
 def dedupe_and_rank(event_data: dict):
-    """Dedupe and assign ranks. Ties get the same rank; next rank skips (1,2,2,4)."""
     clean = {}
     for ev, entries in event_data.items():
         seen = set()
@@ -175,9 +191,7 @@ def dedupe_and_rank(event_data: dict):
             if key not in seen:
                 seen.add(key)
                 uniq.append(e)
-        # sort desc by Points then Name for stability
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
@@ -189,7 +203,6 @@ def dedupe_and_rank(event_data: dict):
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
-            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
@@ -197,22 +210,30 @@ def dedupe_and_rank(event_data: dict):
 # --- UI ---
 st.title("ATA Standings Dashboard")
 
-# Mobile radio (user choice)
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
-# Group selector
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
 
-# Region selector (All / every state/province / International)
-region_choice = st.selectbox("Select region:", REGIONS)
+# District selector
+district_choice = st.selectbox("Select District (optional):", DISTRICTS)
 
-# Name search (optional)
+# Region selector filtered by district
+if district_choice == "All":
+    region_options = REGIONS
+else:
+    region_options = ["All"] + district_map.get(district_choice, [])
+region_choice = st.selectbox("Select region:", region_options)
+
+# Check for invalid combination
+if district_choice != "All" and region_choice not in ["All"] + district_map.get(district_choice, []):
+    st.warning(f"Selected region '{region_choice}' is not in the district '{district_choice}'.")
+    st.stop()
+
+# Name search
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
-# Load Google Sheet (may be empty)
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
-# Go button
 go = st.button("Go")
 
 if go:
@@ -225,7 +246,6 @@ if go:
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
-            # apply name filter if provided
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
             if not rows:
@@ -233,13 +253,10 @@ if go:
 
             st.subheader(ev)
 
-            # MOBILE: show main standings as a proper table, then competitor expanders underneath
             if is_mobile:
                 main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
-                # show full-width, hide index to avoid extra column
                 st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
-                # competitor breakdowns UNDER the main table (one expander per competitor)
                 for row in rows:
                     with st.expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
@@ -253,9 +270,7 @@ if go:
                                 st.write("No tournament data for this event.")
                         else:
                             st.write("No tournament data available.")
-            # DESKTOP: original layout (columns with expander inside the Name column)
             else:
-                # header with wider name/location to reduce wrapping
                 cols_header = st.columns([1,5,3,2])
                 cols_header[0].write("Rank")
                 cols_header[1].write("Name")
@@ -265,7 +280,6 @@ if go:
                 for row in rows:
                     cols = st.columns([1,5,3,2])
                     cols[0].write(row["Rank"])
-                    # Expander header is name-only (no index, no extra text)
                     with cols[1].expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
                             comp_data = sheet_df[
@@ -280,4 +294,3 @@ if go:
                             st.write("No tournament data available.")
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
-
