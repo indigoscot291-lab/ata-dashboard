@@ -54,10 +54,7 @@ REGION_CODES = {
     "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
 }
 
-# Load District sheet
-DISTRICT_SHEET = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
-district_df = pd.read_csv(DISTRICT_SHEET)
-DISTRICTS = [""] + sorted(district_df['District'].dropna().unique())
+BASE_REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
@@ -113,39 +110,64 @@ def parse_standings(html: str):
                     })
     return data
 
-def gather_data(group_key: str, selected_region: str, selected_district: str):
+def gather_data(group_key: str, selected_region: str, selected_district: str, district_map: dict):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # District override
-    if selected_district:
-        district_states = district_df[district_df['District'] == selected_district]['States and Provinces'].dropna().tolist()
-        states = []
-        for item in district_states:
-            states.extend([s.strip() for s in item.split(",")])
-        states = [s for s in states if s in REGION_CODES]
+    # World standings
+    world_html = fetch_html(group["world_url"])
+    if world_html:
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
+            combined[ev].extend(entries)
 
-        if selected_region:  # Specific region inside district
-            country, state_code = REGION_CODES[selected_region]
+    # District mode
+    if selected_district and not selected_region:
+        states_in_district = district_map.get(selected_district, [])
+        any_data = False
+        for region_name in states_in_district:
+            if region_name not in REGION_CODES:
+                continue
+            country, state_code = REGION_CODES[region_name]
             url = group["state_url_template"].format(country, state_code, group["code"])
             html = fetch_html(url)
-            if html:
-                state_data = parse_standings(html)
-                for ev, entries in state_data.items():
-                    combined[ev].extend(entries)
-        else:  # Blank region → fetch all states in district
-            for region_name in states:
-                country, state_code = REGION_CODES[region_name]
-                url = group["state_url_template"].format(country, state_code, group["code"])
-                html = fetch_html(url)
-                if not html:
-                    continue
-                state_data = parse_standings(html)
-                for ev, entries in state_data.items():
-                    combined[ev].extend(entries)
-        return combined, any(len(lst) > 0 for lst in combined.values())
+            if not html:
+                continue
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev].extend(entries)
+            if any(len(lst) > 0 for lst in state_data.values()):
+                any_data = True
+        return combined, any_data
 
-    # Otherwise normal logic
+    if selected_region and selected_district:
+        if selected_region not in REGION_CODES:
+            return combined, False
+        country, state_code = REGION_CODES[selected_region]
+        url = group["state_url_template"].format(country, state_code, group["code"])
+        html = fetch_html(url)
+        if html:
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev] = entries
+            return combined, any(len(lst) > 0 for lst in state_data.values())
+        return combined, False
+
+    # Regular region logic
+    if selected_region not in ["All", "International"]:
+        if selected_region not in REGION_CODES:
+            return combined, False
+        country, state_code = REGION_CODES[selected_region]
+        url = group["state_url_template"].format(country, state_code, group["code"])
+        html = fetch_html(url)
+        if html:
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev] = entries
+            return combined, any(len(lst) > 0 for lst in state_data.values())
+        else:
+            return combined, False
+
     if selected_region == "All":
         any_data = False
         for region_name, (country, state_code) in REGION_CODES.items():
@@ -160,28 +182,14 @@ def gather_data(group_key: str, selected_region: str, selected_district: str):
                 any_data = True
         return combined, any_data
 
-    elif selected_region == "International":
-        world_html = fetch_html(group["world_url"])
-        if world_html:
-            world_data = parse_standings(world_html)
-            intl = {ev: [] for ev in EVENT_NAMES}
-            for ev, entries in world_data.items():
-                for e in entries:
-                    if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
-                        intl[ev].append(e)
-            return intl, any(len(lst) > 0 for lst in intl.values())
-        return combined, False
-
-    elif selected_region in REGION_CODES:
-        country, state_code = REGION_CODES[selected_region]
-        url = group["state_url_template"].format(country, state_code, group["code"])
-        html = fetch_html(url)
-        if html:
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
-                combined[ev].extend(entries)
-            return combined, any(len(lst) > 0 for lst in state_data.values())
-        return combined, False
+    if selected_region == "International":
+        intl = {ev: [] for ev in EVENT_NAMES}
+        for ev, entries in combined.items():
+            for e in entries:
+                if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
+                    intl[ev].append(e)
+        has_any = any(len(lst) > 0 for lst in intl.values())
+        return intl, has_any
 
     return combined, False
 
@@ -216,34 +224,46 @@ def dedupe_and_rank(event_data: dict):
 # --- UI ---
 st.title("ATA Standings Dashboard")
 
+# Mobile radio
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+
+# Group selector
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-district_choice = st.selectbox("Select District (optional):", DISTRICTS)
 
-# Region options depend on district
-if district_choice:
-    district_states = district_df[district_df['District'] == district_choice]['States and Provinces'].dropna().tolist()
-    states = []
-    for item in district_states:
-        states.extend([s.strip() for s in item.split(",")])
-    states = [s for s in states if s in REGION_CODES]
-    region_options = [""] + states
-else:
-    region_options = ["All"] + list(REGION_CODES.keys()) + ["International"]
-
-region_choice = st.selectbox("Select region:", region_options)
-
-name_filter = st.text_input("Search competitor name (optional):").strip().lower()
+# Load Google Sheet
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+
+# Build district mapping dynamically
+district_map = {}
+if not sheet_df.empty and "District" in sheet_df.columns and "States and Provinces" in sheet_df.columns:
+    for _, row in sheet_df[["District", "States and Provinces"]].dropna().iterrows():
+        district = row["District"].strip()
+        states = [s.strip() for s in str(row["States and Provinces"]).split(",") if s.strip()]
+        district_map.setdefault(district, []).extend(states)
+
+# District dropdown
+district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_map.keys()))
+
+# Region dropdown
+if district_choice:
+    district_regions = [""] + district_map.get(district_choice, [])
+    region_choice = st.selectbox("Select Region:", district_regions)
+else:
+    region_choice = st.selectbox("Select Region:", BASE_REGIONS)
+
+# Name search
+name_filter = st.text_input("Search competitor name (optional):").strip().lower()
+
+# Go button
 go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        raw_data, has_results = gather_data(group_choice, region_choice, district_choice)
+        raw_data, has_results = gather_data(group_choice, region_choice, district_choice, district_map)
         data = dedupe_and_rank(raw_data)
 
     if not has_results:
-        st.warning(f"No standings data found for {region_choice or district_choice}.")
+        st.warning(f"No standings data found for {region_choice or district_choice or 'selection'}.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
@@ -257,6 +277,7 @@ if go:
             if is_mobile:
                 main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
                 st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+
                 for row in rows:
                     with st.expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
