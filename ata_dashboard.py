@@ -54,7 +54,7 @@ REGION_CODES = {
     "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
 }
 
-BASE_REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
+REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
@@ -110,50 +110,16 @@ def parse_standings(html: str):
                     })
     return data
 
-def gather_data(group_key: str, selected_region: str, selected_district: str, district_map: dict):
+def gather_data(group_key: str, selected_region: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # World standings
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # District mode
-    if selected_district and not selected_region:
-        states_in_district = district_map.get(selected_district, [])
-        any_data = False
-        for region_name in states_in_district:
-            if region_name not in REGION_CODES:
-                continue
-            country, state_code = REGION_CODES[region_name]
-            url = group["state_url_template"].format(country, state_code, group["code"])
-            html = fetch_html(url)
-            if not html:
-                continue
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
-                combined[ev].extend(entries)
-            if any(len(lst) > 0 for lst in state_data.values()):
-                any_data = True
-        return combined, any_data
-
-    if selected_region and selected_district:
-        if selected_region not in REGION_CODES:
-            return combined, False
-        country, state_code = REGION_CODES[selected_region]
-        url = group["state_url_template"].format(country, state_code, group["code"])
-        html = fetch_html(url)
-        if html:
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
-                combined[ev] = entries
-            return combined, any(len(lst) > 0 for lst in state_data.values())
-        return combined, False
-
-    # Regular region logic
     if selected_region not in ["All", "International"]:
         if selected_region not in REGION_CODES:
             return combined, False
@@ -204,7 +170,6 @@ def dedupe_and_rank(event_data: dict):
                 seen.add(key)
                 uniq.append(e)
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
@@ -216,54 +181,33 @@ def dedupe_and_rank(event_data: dict):
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
-            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
 
+def normalize_name(name):
+    return str(name).strip().lower()
+
 # --- UI ---
 st.title("ATA Standings Dashboard")
 
-# Mobile radio
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
-# Group selector
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-
-# Load Google Sheet
-sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-
-# Build district mapping dynamically
-district_map = {}
-if not sheet_df.empty and "District" in sheet_df.columns and "States and Provinces" in sheet_df.columns:
-    for _, row in sheet_df[["District", "States and Provinces"]].dropna().iterrows():
-        district = row["District"].strip()
-        states = [s.strip() for s in str(row["States and Provinces"]).split(",") if s.strip()]
-        district_map.setdefault(district, []).extend(states)
-
-# District dropdown
-district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_map.keys()))
-
-# Region dropdown
-if district_choice:
-    district_regions = [""] + district_map.get(district_choice, [])
-    region_choice = st.selectbox("Select Region:", district_regions)
-else:
-    region_choice = st.selectbox("Select Region:", BASE_REGIONS)
-
-# Name search
+region_choice = st.selectbox("Select region:", REGIONS)
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
-# Go button
+sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+
 go = st.button("Go")
 
 if go:
     with st.spinner("Loading standings..."):
-        raw_data, has_results = gather_data(group_choice, region_choice, district_choice, district_map)
+        raw_data, has_results = gather_data(group_choice, region_choice)
         data = dedupe_and_rank(raw_data)
 
     if not has_results:
-        st.warning(f"No standings data found for {region_choice or district_choice or 'selection'}.")
+        st.warning(f"No standings data found for {region_choice}.")
     else:
         for ev in EVENT_NAMES:
             rows = data.get(ev, [])
@@ -282,7 +226,7 @@ if go:
                     with st.expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
                             comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
+                                (sheet_df['Name'].apply(normalize_name) == normalize_name(row['Name'])) &
                                 (sheet_df[ev] > 0)
                             ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
                             if not comp_data.empty:
@@ -304,7 +248,7 @@ if go:
                     with cols[1].expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
                             comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
+                                (sheet_df['Name'].apply(normalize_name) == normalize_name(row['Name'])) &
                                 (sheet_df[ev] > 0)
                             ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
                             if not comp_data.empty:
