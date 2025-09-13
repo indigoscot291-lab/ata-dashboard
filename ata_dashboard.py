@@ -71,7 +71,6 @@ def fetch_html(url: str):
 def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(sheet_url)
-        # ensure numeric event cols exist and are numeric
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
@@ -115,7 +114,7 @@ def gather_data(group_key: str, selected_region: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Fetch world standings first
+    # World standings
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
