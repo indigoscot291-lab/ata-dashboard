@@ -66,7 +66,7 @@ def fetch_html(url: str):
         r = requests.get(url, timeout=12)
         if r.status_code == 200:
             return r.text
-    except Exception:
+    except:
         return None
     return None
 
@@ -78,7 +78,7 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
         return df
-    except Exception:
+    except:
         return pd.DataFrame()
 
 def parse_standings(html: str):
@@ -174,19 +174,16 @@ def dedupe_and_rank(event_data: dict):
                 seen.add(key)
                 uniq.append(e)
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
         for item in uniq:
             if prev_points is None or item["Points"] != prev_points:
-                rank_to_assign = current_pos
-                item["Rank"] = rank_to_assign
-                prev_rank = rank_to_assign
+                item["Rank"] = current_pos
+                prev_rank = current_pos
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
-            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
@@ -208,10 +205,9 @@ if district_choice:
 else:
     region_choice = st.selectbox("Select Region:", REGIONS)
 
+# Optional searches
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-
-# --- Optional event filter added ---
-event_filter = st.selectbox("Filter by event (optional):", [""] + EVENT_NAMES)
+event_filter = st.selectbox("Filter by event (optional):", ["All"] + EVENT_NAMES)
 
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
@@ -226,11 +222,12 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
-            # ✅ Apply optional event filter
-            if event_filter and ev != event_filter:
+            # Apply event filter first
+            if event_filter != "All" and ev != event_filter:
                 continue
 
             rows = data.get(ev, [])
+            # Apply name filter
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
             if not rows:
@@ -268,7 +265,7 @@ if go:
                     with cols[1].expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
                             comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
+                                (sheet_df['Name'].str.lower().str.strip() == row["Name"].lower().strip()) &
                                 (sheet_df[ev] > 0)
                             ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
                             if not comp_data.empty:
