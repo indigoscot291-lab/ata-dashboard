@@ -210,8 +210,8 @@ else:
 
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
-# ✅ NEW: optional event search
-event_filter = st.text_input("Search event name (optional):").strip().lower()
+# --- Optional event filter added ---
+event_filter = st.selectbox("Filter by event (optional):", [""] + EVENT_NAMES)
 
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
@@ -226,8 +226,8 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
-            # ✅ Apply event filter
-            if event_filter and event_filter not in ev.lower():
+            # ✅ Apply optional event filter
+            if event_filter and ev != event_filter:
                 continue
 
             rows = data.get(ev, [])
