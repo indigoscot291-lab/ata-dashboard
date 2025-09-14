@@ -66,7 +66,7 @@ def fetch_html(url: str):
         r = requests.get(url, timeout=12)
         if r.status_code == 200:
             return r.text
-    except:
+    except Exception:
         return None
     return None
 
@@ -78,7 +78,7 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
         return df
-    except:
+    except Exception:
         return pd.DataFrame()
 
 def parse_standings(html: str):
@@ -117,7 +117,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # determine regions to fetch
+    # Determine which regions to fetch
     regions_to_fetch = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
@@ -132,14 +132,14 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice=="International":
             regions_to_fetch = []
 
-    # fetch world data first
+    # Fetch world data first
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # fetch state data
+    # Fetch state/province data
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -179,8 +179,9 @@ def dedupe_and_rank(event_data: dict):
         current_pos = 1
         for item in uniq:
             if prev_points is None or item["Points"] != prev_points:
-                item["Rank"] = current_pos
-                prev_rank = current_pos
+                rank_to_assign = current_pos
+                item["Rank"] = rank_to_assign
+                prev_rank = rank_to_assign
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
@@ -190,11 +191,9 @@ def dedupe_and_rank(event_data: dict):
 
 # --- UI ---
 st.title("ATA Standings Dashboard")
-
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-
 district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
 region_options = []
 
@@ -205,12 +204,10 @@ if district_choice:
 else:
     region_choice = st.selectbox("Select Region:", REGIONS)
 
-# Optional searches
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 event_filter = st.selectbox("Filter by event (optional):", ["All"] + EVENT_NAMES)
 
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-
 go = st.button("Go")
 
 if go:
@@ -222,23 +219,18 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
-            # Apply event filter first
             if event_filter != "All" and ev != event_filter:
                 continue
-
             rows = data.get(ev, [])
-            # Apply name filter
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
             if not rows:
                 continue
 
             st.subheader(ev)
-
             if is_mobile:
                 main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
                 st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-
                 for row in rows:
                     with st.expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
@@ -258,14 +250,13 @@ if go:
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
-
                 for row in rows:
                     cols = st.columns([1,5,3,2])
                     cols[0].write(row["Rank"])
                     with cols[1].expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
                             comp_data = sheet_df[
-                                (sheet_df['Name'].str.lower().str.strip() == row["Name"].lower().strip()) &
+                                (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
                                 (sheet_df[ev] > 0)
                             ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
                             if not comp_data.empty:
