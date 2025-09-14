@@ -117,7 +117,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # Determine which regions to fetch
+    # determine regions to fetch
     regions_to_fetch = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
@@ -132,14 +132,14 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice=="International":
             regions_to_fetch = []
 
-    # Fetch world data first
+    # fetch world data first
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # Fetch state/province data
+    # fetch state data
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -174,6 +174,7 @@ def dedupe_and_rank(event_data: dict):
                 seen.add(key)
                 uniq.append(e)
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
+        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
@@ -185,15 +186,18 @@ def dedupe_and_rank(event_data: dict):
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
+            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
 
 # --- UI ---
 st.title("ATA Standings Dashboard")
+
 is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
 group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
+
 district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
 region_options = []
 
@@ -205,9 +209,9 @@ else:
     region_choice = st.selectbox("Select Region:", REGIONS)
 
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-event_filter = st.selectbox("Filter by event (optional):", ["All"] + EVENT_NAMES)
 
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+
 go = st.button("Go")
 
 if go:
@@ -219,8 +223,6 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
-            if event_filter != "All" and ev != event_filter:
-                continue
             rows = data.get(ev, [])
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
@@ -228,9 +230,11 @@ if go:
                 continue
 
             st.subheader(ev)
+
             if is_mobile:
                 main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
                 st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+
                 for row in rows:
                     with st.expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
@@ -250,6 +254,7 @@ if go:
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
+
                 for row in rows:
                     cols = st.columns([1,5,3,2])
                     cols[0].write(row["Rank"])
@@ -267,3 +272,4 @@ if go:
                             st.write("No tournament data available.")
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
+
