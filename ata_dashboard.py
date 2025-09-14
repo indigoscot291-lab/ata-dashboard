@@ -124,6 +124,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
         if region_choice:
             regions_to_fetch = [region_choice]
+        fetch_world = False  # skip world standings if district selected
     else:
         if region_choice not in ["All", "International"]:
             regions_to_fetch = [region_choice]
@@ -131,15 +132,17 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             regions_to_fetch = list(REGION_CODES.keys())
         elif region_choice=="International":
             regions_to_fetch = []
+        fetch_world = True
 
-    # fetch world data first
-    world_html = fetch_html(group["world_url"])
-    if world_html:
-        world_data = parse_standings(world_html)
-        for ev, entries in world_data.items():
-            combined[ev].extend(entries)
+    # fetch world data only if not restricting by district
+    if fetch_world:
+        world_html = fetch_html(group["world_url"])
+        if world_html:
+            world_data = parse_standings(world_html)
+            for ev, entries in world_data.items():
+                combined[ev].extend(entries)
 
-    # fetch state data
+    # fetch state/province data
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -208,6 +211,8 @@ if district_choice:
 else:
     region_choice = st.selectbox("Select Region:", REGIONS)
 
+event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
+
 name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
 sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
@@ -223,6 +228,8 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
+            if event_choice and ev != event_choice:
+                continue  # filter by event
             rows = data.get(ev, [])
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
@@ -272,4 +279,3 @@ if go:
                             st.write("No tournament data available.")
                     cols[2].write(row["Location"])
                     cols[3].write(row["Points"])
-
