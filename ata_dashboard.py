@@ -228,11 +228,31 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
+            # event filter
             if event_choice and ev != event_choice:
-                continue  # filter by event
+                continue
+
             rows = data.get(ev, [])
+
+            # --- Important: enforce region/district membership when filtering ---
+            if district_choice:
+                # if a specific region within the district was chosen, restrict to that region
+                if region_choice:
+                    rows = [r for r in rows if region_choice.lower() in r["Location"].lower()]
+                else:
+                    # region blank -> include only rows from any state/province in the district
+                    states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
+                    region_list = [s.strip() for s in states_in_district.split(',')]
+                    rows = [r for r in rows if any(region.lower() in r["Location"].lower() for region in region_list)]
+            else:
+                # no district selected: if a region (not "All") was chosen, restrict to it
+                if region_choice and region_choice != "All":
+                    rows = [r for r in rows if region_choice.lower() in r["Location"].lower()]
+
+            # apply name filter
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
+
             if not rows:
                 continue
 
