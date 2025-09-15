@@ -124,25 +124,22 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
         if region_choice:
             regions_to_fetch = [region_choice]
-        fetch_world = False  # skip world standings if district selected
     else:
         if region_choice not in ["All", "International"]:
             regions_to_fetch = [region_choice]
-        elif region_choice=="All":
+        elif region_choice == "All":
             regions_to_fetch = list(REGION_CODES.keys())
-        elif region_choice=="International":
+        elif region_choice == "International":
             regions_to_fetch = []
-        fetch_world = True
 
-    # fetch world data only if not restricting by district
-    if fetch_world:
-        world_html = fetch_html(group["world_url"])
-        if world_html:
-            world_data = parse_standings(world_html)
-            for ev, entries in world_data.items():
-                combined[ev].extend(entries)
+    # fetch world data first
+    world_html = fetch_html(group["world_url"])
+    if world_html:
+        world_data = parse_standings(world_html)
+        for ev, entries in world_data.items():
+            combined[ev].extend(entries)
 
-    # fetch state/province data
+    # fetch state data
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -154,8 +151,8 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
 
-    # International
-    if region_choice=="International":
+    # International filter
+    if region_choice == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
@@ -228,28 +225,29 @@ if go:
         st.warning(f"No standings data found for {region_choice or district_choice}.")
     else:
         for ev in EVENT_NAMES:
-            # event filter
             if event_choice and ev != event_choice:
                 continue
 
             rows = data.get(ev, [])
 
-            # --- Important: enforce region/district membership when filtering ---
+            # --- enforce region/district membership ---
             if district_choice:
-                # if a specific region within the district was chosen, restrict to that region
                 if region_choice:
-                    rows = [r for r in rows if region_choice.lower() in r["Location"].lower()]
+                    if region_choice in REGION_CODES:
+                        _, abbrev = REGION_CODES[region_choice]
+                        rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
                 else:
-                    # region blank -> include only rows from any state/province in the district
                     states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
                     region_list = [s.strip() for s in states_in_district.split(',')]
-                    rows = [r for r in rows if any(region.lower() in r["Location"].lower() for region in region_list)]
+                    abbrevs = [REGION_CODES[r][1] for r in region_list if r in REGION_CODES]
+                    rows = [r for r in rows if any(r["Location"].endswith(f", {abbr}") for abbr in abbrevs)]
             else:
-                # no district selected: if a region (not "All") was chosen, restrict to it
                 if region_choice and region_choice != "All":
-                    rows = [r for r in rows if region_choice.lower() in r["Location"].lower()]
+                    if region_choice in REGION_CODES:
+                        _, abbrev = REGION_CODES[region_choice]
+                        rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
 
-            # apply name filter
+            # name filter
             if name_filter:
                 rows = [r for r in rows if name_filter in r["Name"].lower()]
 
@@ -276,14 +274,14 @@ if go:
                         else:
                             st.write("No tournament data available.")
             else:
-                cols_header = st.columns([1,5,3,2])
+                cols_header = st.columns([1, 5, 3, 2])
                 cols_header[0].write("Rank")
                 cols_header[1].write("Name")
                 cols_header[2].write("Location")
                 cols_header[3].write("Points")
 
                 for row in rows:
-                    cols = st.columns([1,5,3,2])
+                    cols = st.columns([1, 5, 3, 2])
                     cols[0].write(row["Rank"])
                     with cols[1].expander(row["Name"]):
                         if not sheet_df.empty and ev in sheet_df.columns:
