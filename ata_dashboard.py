@@ -4,6 +4,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
+# Page config
+st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
+
 # --- CONFIG ---
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
@@ -97,108 +100,76 @@ def parse_standings(html: str):
                     })
     return data
 
-def gather_data_for_group(group_key: str):
-    group = GROUPS[group_key]
-    combined = {ev: [] for ev in EVENT_NAMES}
-
-    # Worlds (International)
-    world_html = fetch_html(group["world_url"])
-    if world_html:
-        world_data = parse_standings(world_html)
-        for ev, entries in world_data.items():
-            combined[ev].extend(entries)
-
-    # All states/provinces
-    for region_name, (country, state_code) in REGION_CODES.items():
-        url = group["state_url_template"].format(country, state_code, group["code"])
-        html = fetch_html(url)
-        if html:
-            state_data = parse_standings(html)
-            for ev, entries in state_data.items():
-                combined[ev].extend(entries)
-
-    return combined
-
-# --- UI ---
-st.title("ATA Dashboard Options")
-
-page = st.sidebar.selectbox("Select Page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"])
+# --- PAGE SELECTION ---
+page = st.selectbox("Select page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"])
 
 if page == "ATA Standings Dashboard":
-    # --- Main dashboard page ---
-    from datetime import datetime
-
+    # Mobile device question
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == True
+    
     # Group selector
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-
-    # District & region selectors
+    
+    # District/Region selection
     district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
+    region_options = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
         region_options = [s.strip() for s in states_in_district.split(',')]
         region_choice = st.selectbox("Select Region (optional):", [""] + region_options)
     else:
         region_choice = st.selectbox("Select Region:", REGIONS)
-
-    # Optional name search
+    
+    # Name filter
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-
-    # Optional event search
+    
+    # Event filter
     event_filter = st.selectbox("Filter by event (optional):", ["All"] + EVENT_NAMES)
-
+    
+    # Go button
     go = st.button("Go")
-
+    
     if go:
-        with st.spinner("Loading standings..."):
-            raw_data, has_results = gather_data_for_group(group_choice), True
-            # Filter by district/region
+        # Gather data (reusing your existing logic)
+        def gather_data_dashboard(group_key: str, region_choice: str, district_choice: str):
+            group = GROUPS[group_key]
+            combined = {ev: [] for ev in EVENT_NAMES}
+    
+            # determine regions to fetch
+            regions_to_fetch = []
             if district_choice:
                 states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
-                states_set = set(s.strip() for s in states_in_district.split(','))
-                for ev in raw_data:
-                    raw_data[ev] = [c for c in raw_data[ev] if c["Location"].split(",")[0].strip() in states_set]
-            elif region_choice and region_choice != "All" and region_choice != "International":
-                raw_data = {ev:[c for c in raw_data[ev] if c["Location"].split(",")[0].strip() == region_choice] for ev in EVENT_NAMES}
-            elif region_choice == "International":
-                raw_data = {ev:[c for c in raw_data[ev] if not re.search(r",\s*[A-Z]{2}$", c["Location"])] for ev in EVENT_NAMES}
-
-            # Filter by event
-            if event_filter != "All":
-                filtered_data = {event_filter: raw_data[event_filter]}
+                regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
+                if region_choice:
+                    regions_to_fetch = [region_choice]
             else:
-                filtered_data = raw_data
-
-            # Sort & display
-            for ev, rows in filtered_data.items():
-                if name_filter:
-                    rows = [r for r in rows if name_filter in r["Name"].lower()]
-                if not rows:
+                if region_choice not in ["All", "International"]:
+                    regions_to_fetch = [region_choice]
+                elif region_choice=="All":
+                    regions_to_fetch = list(REGION_CODES.keys())
+                elif region_choice=="International":
+                    regions_to_fetch = []
+    
+            # fetch world data first
+            world_html = fetch_html(group["world_url"])
+            if world_html:
+                world_data = parse_standings(world_html)
+                for ev, entries in world_data.items():
+                    combined[ev].extend(entries)
+    
+            # fetch state data
+            for region in regions_to_fetch:
+                if region not in REGION_CODES:
                     continue
-                st.subheader(ev)
-                df_display = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
-                st.dataframe(df_display.reset_index(drop=True), use_container_width=True, hide_index=True)
-
-elif page == "1st Degree Black Belt Women 50-59":
-    # --- New page: full table of 1st Degree Women 50-59 ---
-    with st.spinner("Loading competitors..."):
-        raw_data = gather_data_for_group("1st Degree Black Belt Women 50-59")
-
-        # Combine into one row per competitor
-        combined_rows = {}
-        for ev, competitors in raw_data.items():
-            for c in competitors:
-                key = (c["Name"], c["Location"])
-                if key not in combined_rows:
-                    combined_rows[key] = {"Name": c["Name"], "Location": c["Location"]}
-                    for e in EVENT_NAMES:
-                        combined_rows[key][e] = ""
-                combined_rows[key][ev] = "X"
-
-        df_final = pd.DataFrame(list(combined_rows.values()))
-
-        # Sort alphabetically by state/province then last name
-        df_final["State"] = df_final["Location"].apply(lambda x: x.split(",")[0].strip())
-        df_final["LastName"] = df_final["Name"].apply(lambda x: x.split()[-1].strip())
-        df_final = df_final.sort_values(by=["State","LastName"]).drop(columns=["State","LastName"])
-
-        st.dataframe(df_final.reset_index(drop=True), use_container_width=True)
+                country, state_code = REGION_CODES[region]
+                url = group["state_url_template"].format(country, state_code, group["code"])
+                html = fetch_html(url)
+                if html:
+                    state_data = parse_standings(html)
+                    for ev, entries in state_data.items():
+                        combined[ev].extend(entries)
+    
+            # International
+            if region_choice=="International":
+                intl = {ev: [] for ev in EVENT_NAMES}
+                for ev, entries in combined.items
