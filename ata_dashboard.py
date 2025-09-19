@@ -117,19 +117,19 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # determine regions to fetch
+    # --- FIXED REGION/DISTRICT LOGIC ---
     regions_to_fetch = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
         regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
-        if region_choice:
+        if region_choice and region_choice != "":
             regions_to_fetch = [region_choice]
     else:
-        if region_choice not in ["All", "International"]:
+        if region_choice not in ["All", "International", ""]:
             regions_to_fetch = [region_choice]
-        elif region_choice=="All":
+        elif region_choice == "All" or region_choice == "":
             regions_to_fetch = list(REGION_CODES.keys())
-        elif region_choice=="International":
+        elif region_choice == "International":
             regions_to_fetch = []
 
     # fetch world data first
@@ -174,7 +174,6 @@ def dedupe_and_rank(event_data: dict):
                 seen.add(key)
                 uniq.append(e)
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
@@ -186,7 +185,6 @@ def dedupe_and_rank(event_data: dict):
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
-            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
@@ -244,47 +242,19 @@ if page_choice == "ATA Standings Dashboard":
 
                 st.subheader(ev)
 
-                if is_mobile:
-                    main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
-                    st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-
-                    for row in rows:
-                        with st.expander(row["Name"]):
-                            if not sheet_df.empty and ev in sheet_df.columns:
-                                comp_data = sheet_df[
-                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
-                                    (sheet_df[ev] > 0)
-                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                                if not comp_data.empty:
-                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
-                                else:
-                                    st.write("No tournament data for this event.")
+                for row in rows:
+                    with st.expander(f"{row['Rank']}. {row['Name']} ({row['Location']}) - {row['Points']} pts"):
+                        if not sheet_df.empty and ev in sheet_df.columns:
+                            comp_data = sheet_df[
+                                (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
+                                (sheet_df[ev] > 0)
+                            ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
+                            if not comp_data.empty:
+                                st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
                             else:
-                                st.write("No tournament data available.")
-                else:
-                    cols_header = st.columns([1,5,3,2])
-                    cols_header[0].write("Rank")
-                    cols_header[1].write("Name")
-                    cols_header[2].write("Location")
-                    cols_header[3].write("Points")
-
-                    for row in rows:
-                        cols = st.columns([1,5,3,2])
-                        cols[0].write(row["Rank"])
-                        with cols[1].expander(row["Name"]):
-                            if not sheet_df.empty and ev in sheet_df.columns:
-                                comp_data = sheet_df[
-                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
-                                    (sheet_df[ev] > 0)
-                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                                if not comp_data.empty:
-                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
-                                else:
-                                    st.write("No tournament data for this event.")
-                            else:
-                                st.write("No tournament data available.")
-                        cols[2].write(row["Location"])
-                        cols[3].write(row["Points"])
+                                st.write("No tournament data for this event.")
+                        else:
+                            st.write("No tournament data available.")
 
 # --- PAGE 2: 50-59 Women ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
