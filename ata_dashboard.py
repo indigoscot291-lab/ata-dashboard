@@ -191,16 +191,27 @@ def dedupe_and_rank(event_data: dict):
         clean[ev] = uniq
     return clean
 
-# --- PAGE SELECTION ---
-page_choice = st.selectbox(
-    "Select a page:",
-    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"]
-)
+# --- MAIN SCREEN ---
+if "page" not in st.session_state:
+    st.session_state.page = "main"
+
+if st.session_state.page == "main":
+    st.title("ATA Dashboard")
+    st.write("Select an option below:")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("ATA Standings Dashboard"):
+            st.session_state.page = "standings"
+            st.experimental_rerun()
+    with col2:
+        if st.button("1st Degree Black Belt Women 50-59"):
+            st.session_state.page = "50_59"
+            st.experimental_rerun()
 
 # --- PAGE 1: Standings Dashboard ---
-if page_choice == "ATA Standings Dashboard":
+elif st.session_state.page == "standings":
     st.title("ATA Standings Dashboard")
-
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
@@ -218,7 +229,6 @@ if page_choice == "ATA Standings Dashboard":
     event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
 
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-
     sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
     go = st.button("Go")
@@ -247,20 +257,6 @@ if page_choice == "ATA Standings Dashboard":
                 if is_mobile:
                     main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
                     st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-
-                    for row in rows:
-                        with st.expander(row["Name"]):
-                            if not sheet_df.empty and ev in sheet_df.columns:
-                                comp_data = sheet_df[
-                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
-                                    (sheet_df[ev] > 0)
-                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                                if not comp_data.empty:
-                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
-                                else:
-                                    st.write("No tournament data for this event.")
-                            else:
-                                st.write("No tournament data available.")
                 else:
                     cols_header = st.columns([1,5,3,2])
                     cols_header[0].write("Rank")
@@ -271,25 +267,13 @@ if page_choice == "ATA Standings Dashboard":
                     for row in rows:
                         cols = st.columns([1,5,3,2])
                         cols[0].write(row["Rank"])
-                        with cols[1].expander(row["Name"]):
-                            if not sheet_df.empty and ev in sheet_df.columns:
-                                comp_data = sheet_df[
-                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
-                                    (sheet_df[ev] > 0)
-                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                                if not comp_data.empty:
-                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
-                                else:
-                                    st.write("No tournament data for this event.")
-                            else:
-                                st.write("No tournament data available.")
+                        cols[1].write(row["Name"])
                         cols[2].write(row["Location"])
                         cols[3].write(row["Points"])
 
 # --- PAGE 2: 50-59 Women ---
-elif page_choice == "1st Degree Black Belt Women 50-59":
+elif st.session_state.page == "50_59":
     st.title("1st Degree Black Belt Women 50-59")
-
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
     group_key = "1st Degree Black Belt Women 50-59"
@@ -320,14 +304,10 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 
     cols = ["State", "Name", "Location"] + EVENT_NAMES
     df = df[cols]
-
     df = df.sort_values(by=["State", "Name"])
 
     if is_mobile:
-        st.dataframe(
-            df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True),
+                     use_container_width=True, hide_index=True)
     else:
         st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
