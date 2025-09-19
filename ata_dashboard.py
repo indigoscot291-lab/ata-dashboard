@@ -174,7 +174,6 @@ def dedupe_and_rank(event_data: dict):
                 seen.add(key)
                 uniq.append(e)
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
@@ -186,37 +185,29 @@ def dedupe_and_rank(event_data: dict):
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
-            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
 
-# --- UI ---
-st.title("ATA Standings Dashboard")
+# --- PAGE SELECTION ---
+page_choice = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"])
 
-is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
-
-page_choice = st.selectbox("Choose Page:", ["ATA Standings", "50-59 Summary"])
-
-if page_choice == "ATA Standings":
+# --- PAGE 1: Standings Dashboard ---
+if page_choice == "ATA Standings Dashboard":
+    st.title("ATA Standings Dashboard")
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-
     district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
     region_options = []
-
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
         region_options = [s.strip() for s in states_in_district.split(',')]
         region_choice = st.selectbox("Select Region (optional):", [""] + region_options)
     else:
         region_choice = st.selectbox("Select Region:", REGIONS)
-
     event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
-
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-
     sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-
     go = st.button("Go")
 
     if go:
@@ -230,10 +221,9 @@ if page_choice == "ATA Standings":
             for ev in EVENT_NAMES:
                 if event_choice and ev != event_choice:
                     continue
-
                 rows = data.get(ev, [])
 
-                # --- enforce region/district membership ---
+                # enforce region/district membership
                 if district_choice:
                     if region_choice:
                         if region_choice in REGION_CODES:
@@ -250,7 +240,6 @@ if page_choice == "ATA Standings":
                             _, abbrev = REGION_CODES[region_choice]
                             rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
 
-                # name filter
                 if name_filter:
                     rows = [r for r in rows if name_filter in r["Name"].lower()]
 
@@ -262,7 +251,6 @@ if page_choice == "ATA Standings":
                 if is_mobile:
                     main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
                     st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-
                     for row in rows:
                         with st.expander(row["Name"]):
                             if not sheet_df.empty and ev in sheet_df.columns:
@@ -282,7 +270,6 @@ if page_choice == "ATA Standings":
                     cols_header[1].write("Name")
                     cols_header[2].write("Location")
                     cols_header[3].write("Points")
-
                     for row in rows:
                         cols = st.columns([1, 5, 3, 2])
                         cols[0].write(row["Rank"])
@@ -301,24 +288,49 @@ if page_choice == "ATA Standings":
                         cols[2].write(row["Location"])
                         cols[3].write(row["Points"])
 
-elif page_choice == "50-59 Summary":
-    sheet_df = fetch_sheet(GROUPS["1st Degree Black Belt Women 50-59"]["sheet_url"])
-    if sheet_df.empty:
-        st.warning("No tournament data available.")
+# --- PAGE 2: 50-59 Women ---
+elif page_choice == "1st Degree Black Belt Women 50-59":
+    st.title("1st Degree Black Belt Women 50-59")
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+
+    group_key = "1st Degree Black Belt Women 50-59"
+    combined, _ = gather_data(group_key, "All", "")
+
+    rows = {}
+    for ev, entries in combined.items():
+        for e in entries:
+            name = e["Name"]
+            location = e["Location"]
+            if (name, location) not in rows:
+                rows[(name, location)] = {ev2: "" for ev2 in EVENT_NAMES}
+            rows[(name, location)][ev] = "X"
+
+    df = pd.DataFrame([{"Name": k[0], "Location": k[1], **v} for k, v in rows.items()])
+
+    if "Location" in df.columns:
+        loc_split = df["Location"].str.split(",", n=1, expand=True)
+        if loc_split.shape[1] == 2:
+            df["Town"] = loc_split[0].str.strip()
+            df["State"] = loc_split[1].str.strip()
+        else:
+            df["Town"] = df["Location"]
+            df["State"] = ""
+
+    cols = ["State", "Name", "Location"] + EVENT_NAMES
+    df = df[cols]
+    df = df.sort_values(by=["State", "Name"])
+
+    # Main table
+    if is_mobile:
+        st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
-        # Add "X" marker for participants with points
-        df = sheet_df.copy()
-        for ev in EVENT_NAMES:
-            if ev in df.columns:
-                df[ev] = df[ev].apply(lambda x: "X" if x > 0 else "")
+        st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
-        st.dataframe(df, use_container_width=True, hide_index=True)
+    # --- Add counts per event in a table ---
+    counts_df = pd.DataFrame({
+        "Event": EVENT_NAMES,
+        "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
+    })
 
-        # --- Add counts per event in a table ---
-        counts_df = pd.DataFrame({
-            "Event": EVENT_NAMES,
-            "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
-        })
-
-        st.subheader("Competitors with points per event")
-        st.dataframe(counts_df, use_container_width=True, hide_index=True)
+    st.subheader("Competitors with points per event")
+    st.dataframe(counts_df.reset_index(drop=True), use_container_width=True, hide_index=True)
