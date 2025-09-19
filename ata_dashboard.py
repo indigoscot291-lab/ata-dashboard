@@ -191,8 +191,11 @@ def dedupe_and_rank(event_data: dict):
         clean[ev] = uniq
     return clean
 
-# --- PAGE SELECTION DROPDOWN ---
-page_choice = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"])
+# --- UI ---
+page_choice = st.selectbox(
+    "Select a page:",
+    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"]
+)
 
 # --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
@@ -304,49 +307,53 @@ if page_choice == "ATA Standings Dashboard":
 
 # --- PAGE 2: 50-59 Women ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
-    st.title("1st Degree Black Belt Women 50-59 Standings")
+    st.title("1st Degree Black Belt Women 50-59")
 
-    is_mobile_50_59 = st.radio("Are you on a mobile device for 50-59 table?", ["No", "Yes"], key="mobile_50_59") == "Yes"
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
-    group_key_50_59 = "1st Degree Black Belt Women 50-59"
-    combined_50_59, _ = gather_data(group_key_50_59, "All", "")
+    group_key = "1st Degree Black Belt Women 50-59"
+    combined, _ = gather_data(group_key, "All", "")
 
-    # organize data: one row per competitor with X for each event they have points in
-    rows_50_59 = {}
-    for ev, entries in combined_50_59.items():
+    rows = {}
+    for ev, entries in combined.items():
         for e in entries:
             name = e["Name"]
             location = e["Location"]
-            if (name, location) not in rows_50_59:
-                rows_50_59[(name, location)] = {ev2: "" for ev2 in EVENT_NAMES}
-            rows_50_59[(name, location)][ev] = "X"
+            if (name, location) not in rows:
+                rows[(name, location)] = {ev2: "" for ev2 in EVENT_NAMES}
+            rows[(name, location)][ev] = "X"
 
-    df_50_59 = pd.DataFrame([
+    df = pd.DataFrame([
         {"Name": k[0], "Location": k[1], **v}
-        for k, v in rows_50_59.items()
+        for k, v in rows.items()
     ])
 
-    # split Location into Town and State
-    if "Location" in df_50_59.columns:
-        loc_split = df_50_59["Location"].str.split(",", n=1, expand=True)
+    if "Location" in df.columns:
+        loc_split = df["Location"].str.split(",", n=1, expand=True)
         if loc_split.shape[1] == 2:
-            df_50_59["Town"] = loc_split[0].str.strip()
-            df_50_59["State"] = loc_split[1].str.strip()
+            df["Town"] = loc_split[0].str.strip()
+            df["State"] = loc_split[1].str.strip()
         else:
-            df_50_59["Town"] = df_50_59["Location"]
-            df_50_59["State"] = ""
+            df["Town"] = df["Location"]
+            df["State"] = ""
 
-    # reorder columns
-    cols_50_59 = ["State", "Name", "Location"] + EVENT_NAMES
-    df_50_59 = df_50_59[cols_50_59]
-    df_50_59 = df_50_59.sort_values(by=["State", "Name"])
+    cols = ["State", "Name", "Location"] + EVENT_NAMES
+    df = df[cols]
+    df = df.sort_values(by=["State", "Name"])
 
-    # display table
-    if is_mobile_50_59:
+    if is_mobile:
         st.dataframe(
-            df_50_59[["State", "Name"] + EVENT_NAMES].reset_index(drop=True),
+            df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True),
             use_container_width=True,
             hide_index=True
         )
     else:
-        st.dataframe(df_50_59.reset_index(drop=True), use_container_width=True, hide_index=True)
+        st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
+
+    # --- Add counts per event in a table ---
+    counts_df = pd.DataFrame({
+        "Event": EVENT_NAMES,
+        "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
+    })
+    st.subheader("Competitors with points per event")
+    st.table(counts_df)
