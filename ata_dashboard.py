@@ -321,16 +321,4 @@ elif page_choice == "50-59 Summary":
         })
 
         st.subheader("Competitors with points per event")
-
-        if is_mobile:
-            st.dataframe(counts_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-        else:
-            col1, col2 = st.columns([2, 1])  # make Event wider, Competitors narrower
-            with col1:
-                st.write("**Event**")
-                for ev in counts_df["Event"]:
-                    st.write(ev)
-            with col2:
-                st.write("**Competitors with Points**")
-                for pts in counts_df["Competitors with Points"]:
-                    st.write(pts)
+        st.dataframe(counts_df, use_container_width=True, hide_index=True)
