@@ -4,9 +4,6 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
-# Page config
-st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
-
 # --- CONFIG ---
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
@@ -17,14 +14,12 @@ GROUPS = {
     "1st Degree Black Belt Women 50-59": {
         "code": "W01D",
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}"
     },
     "2nd/3rd Degree Black Belt Women 40-49": {
         "code": "W23C",
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}"
     }
 }
 
@@ -59,6 +54,10 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
+# --- STATE ---
+if 'page' not in st.session_state:
+    st.session_state.page = "main"
+
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
@@ -66,20 +65,9 @@ def fetch_html(url: str):
         r = requests.get(url, timeout=12)
         if r.status_code == 200:
             return r.text
-    except Exception:
+    except:
         return None
     return None
-
-@st.cache_data(ttl=3600)
-def fetch_sheet(sheet_url: str) -> pd.DataFrame:
-    try:
-        df = pd.read_csv(sheet_url)
-        for ev in EVENT_NAMES:
-            if ev in df.columns:
-                df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
-        return df
-    except Exception:
-        return pd.DataFrame()
 
 def parse_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
@@ -88,14 +76,11 @@ def parse_standings(html: str):
     tables = soup.find_all("table")
     for header, table in zip(headers, tables):
         evt = header.find("span", class_="text-primary text-uppercase")
-        if not evt:
-            continue
+        if not evt: continue
         ev_name = evt.get_text(strip=True)
-        if ev_name not in EVENT_NAMES:
-            continue
+        if ev_name not in EVENT_NAMES: continue
         tbody = table.find("tbody")
-        if not tbody:
-            continue
+        if not tbody: continue
         for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
             if len(cols) == 4 and all(cols):
@@ -113,7 +98,7 @@ def parse_standings(html: str):
                     })
     return data
 
-def gather_data(group_key: str, region_choice: str, district_choice: str):
+def gather_data(group_key: str, region_choice: str = None, district_choice: str = None):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
@@ -132,17 +117,16 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice=="International":
             regions_to_fetch = []
 
-    # fetch world data first
+    # fetch world data
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # fetch state data
+    # fetch state/province data
     for region in regions_to_fetch:
-        if region not in REGION_CODES:
-            continue
+        if region not in REGION_CODES: continue
         country, state_code = REGION_CODES[region]
         url = group["state_url_template"].format(country, state_code, group["code"])
         html = fetch_html(url)
@@ -174,7 +158,6 @@ def dedupe_and_rank(event_data: dict):
                 seen.add(key)
                 uniq.append(e)
         uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        processed = 0
         prev_points = None
         prev_rank = None
         current_pos = 1
@@ -186,36 +169,34 @@ def dedupe_and_rank(event_data: dict):
             else:
                 item["Rank"] = prev_rank
             prev_points = item["Points"]
-            processed += 1
             current_pos += 1
         clean[ev] = uniq
     return clean
 
-# --- MAIN SCREEN ---
-if "page" not in st.session_state:
-    st.session_state.page = "main"
-
+# --- MAIN PAGE ---
 if st.session_state.page == "main":
     st.title("ATA Dashboard")
     st.write("Select an option below:")
 
-    col1, col2 = st.columns(2)
-    with col1:
+    # Centered vertically stacked buttons
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
         if st.button("ATA Standings Dashboard"):
             st.session_state.page = "standings"
             st.experimental_rerun()
-    with col2:
+        st.write("")  # spacing
         if st.button("1st Degree Black Belt Women 50-59"):
             st.session_state.page = "50_59"
             st.experimental_rerun()
 
-# --- PAGE 1: Standings Dashboard ---
-elif st.session_state.page == "standings":
+# --- ATA Standings Page ---
+if st.session_state.page == "standings":
     st.title("ATA Standings Dashboard")
+
+    # Mobile question
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-
     district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
     region_options = []
 
@@ -226,10 +207,8 @@ elif st.session_state.page == "standings":
     else:
         region_choice = st.selectbox("Select Region:", REGIONS)
 
-    event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
-
+    event_filter = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-    sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
 
     go = st.button("Go")
 
@@ -241,11 +220,9 @@ elif st.session_state.page == "standings":
         if not has_results:
             st.warning(f"No standings data found for {region_choice or district_choice}.")
         else:
-            events_to_display = EVENT_NAMES
-            if event_choice:
-                events_to_display = [event_choice]
-
-            for ev in events_to_display:
+            for ev in EVENT_NAMES:
+                if event_filter and ev != event_filter:
+                    continue
                 rows = data.get(ev, [])
                 if name_filter:
                     rows = [r for r in rows if name_filter in r["Name"].lower()]
@@ -253,61 +230,31 @@ elif st.session_state.page == "standings":
                     continue
 
                 st.subheader(ev)
+                main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
+                st.dataframe(main_df.reset_index(drop=True), use_container_width=True)
 
-                if is_mobile:
-                    main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
-                    st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-                else:
-                    cols_header = st.columns([1,5,3,2])
-                    cols_header[0].write("Rank")
-                    cols_header[1].write("Name")
-                    cols_header[2].write("Location")
-                    cols_header[3].write("Points")
-
-                    for row in rows:
-                        cols = st.columns([1,5,3,2])
-                        cols[0].write(row["Rank"])
-                        cols[1].write(row["Name"])
-                        cols[2].write(row["Location"])
-                        cols[3].write(row["Points"])
-
-# --- PAGE 2: 50-59 Women ---
-elif st.session_state.page == "50_59":
+# --- 50-59 Page ---
+if st.session_state.page == "50_59":
     st.title("1st Degree Black Belt Women 50-59")
+
+    # Mobile question
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
-    group_key = "1st Degree Black Belt Women 50-59"
-    combined, _ = gather_data(group_key, "All", "")
-
-    rows = {}
-    for ev, entries in combined.items():
-        for e in entries:
-            name = e["Name"]
-            location = e["Location"]
-            if (name, location) not in rows:
-                rows[(name, location)] = {ev2: "" for ev2 in EVENT_NAMES}
-            rows[(name, location)][ev] = "X"
-
-    df = pd.DataFrame([
-        {"Name": k[0], "Location": k[1], **v}
-        for k, v in rows.items()
-    ])
-
-    if "Location" in df.columns:
-        loc_split = df["Location"].str.split(",", n=1, expand=True)
-        if loc_split.shape[1] == 2:
-            df["Town"] = loc_split[0].str.strip()
-            df["State"] = loc_split[1].str.strip()
-        else:
-            df["Town"] = df["Location"]
-            df["State"] = ""
-
-    cols = ["State", "Name", "Location"] + EVENT_NAMES
-    df = df[cols]
-    df = df.sort_values(by=["State", "Name"])
-
-    if is_mobile:
-        st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True),
-                     use_container_width=True, hide_index=True)
-    else:
-        st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
+    with st.spinner("Loading data..."):
+        combined, _ = gather_data("1st Degree Black Belt Women 50-59")
+        all_rows = []
+        for ev, entries in combined.items():
+            for e in entries:
+                found = next((r for r in all_rows if r["Name"]==e["Name"] and r["Location"]==e["Location"]), None)
+                if found:
+                    found[ev] = "X"
+                else:
+                    row = {"Name": e["Name"], "Location": e["Location"]}
+                    for ev2 in EVENT_NAMES:
+                        row[ev2] = "X" if ev2==ev else ""
+                    all_rows.append(row)
+        df = pd.DataFrame(all_rows)
+        df[['Town','State']] = df['Location'].str.split(',',1,expand=True)
+        df.sort_values(by=['State','Town','Name'], inplace=True)
+        df.drop(columns=['Location'], inplace=True)
+        st.dataframe(df.reset_index(drop=True), use_container_width=True)
