@@ -64,7 +64,7 @@ def fetch_html(url: str):
         r = requests.get(url, timeout=12)
         if r.status_code == 200:
             return r.text
-    except:
+    except Exception:
         return None
     return None
 
@@ -160,7 +160,7 @@ def dedupe_and_rank(event_data: dict):
             if key not in seen:
                 seen.add(key)
                 uniq.append(e)
-        uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
+        uniq.sort(key=lambda x: (x["Location"].split(",")[-1], x["Location"], x["Name"]))
         processed = 0
         prev_points = None
         prev_rank = None
@@ -178,50 +178,47 @@ def dedupe_and_rank(event_data: dict):
         clean[ev] = uniq
     return clean
 
+# --- 50-59 Table ---
 def gather_50_59_table():
-    group = "1st Degree Black Belt Women 50-59"
-    combined, _ = gather_data(group, "All", "")
-    records = []
+    group_key = "1st Degree Black Belt Women 50-59"
+    combined, _ = gather_data(group_key, "All", "")
+    all_rows = []
     for ev, entries in combined.items():
         for e in entries:
-            found = next((r for r in records if r['Name']==e['Name'] and r['Location']==e['Location']), None)
-            if not found:
-                record = {'Name': e['Name'], 'Location': e['Location']}
-                for ev2 in EVENT_NAMES:
-                    record[ev2] = ""
-                records.append(record)
-                found = record
-            if e['Points']>0:
-                found[ev] = "X"
-    df = pd.DataFrame(records)
-    df['Location'] = df['Location'].astype(str)
+            e_copy = e.copy()
+            e_copy["Event"] = ev
+            all_rows.append(e_copy)
+
+    if not all_rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(all_rows)
+    # one row per competitor
+    df = df.pivot_table(index=["Name","Location"], columns="Event", values="Points", aggfunc='sum', fill_value=0)
+    df = df.reset_index()
+    # X if points > 0
+    for ev in EVENT_NAMES:
+        if ev in df.columns:
+            df[ev] = df[ev].apply(lambda x: 'X' if x > 0 else '')
+        else:
+            df[ev] = ''
+    # split town/state
     df[['Town','State']] = df['Location'].str.split(',',1,expand=True)
-    df = df.sort_values(['State','Name'])
+    df = df.sort_values(by=['State','Town','Name'])
     return df
 
-# --- MAIN MENU ---
+# --- MAIN PAGE ---
 st.title("ATA Dashboard")
-col1, col2 = st.columns([1,1])
-with col1:
-    if st.button("ATA Standings Dashboard"):
-        st.session_state['page'] = "ATA Standings"
-        st.experimental_rerun()
-with col2:
-    if st.button("1st Degree Black Belt Women 50-59"):
-        st.session_state['page'] = "1st Degree Black Belt Women 50-59"
-        st.experimental_rerun()
+page_option = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"])
 
-if 'page' not in st.session_state:
-    st.session_state['page'] = None
+if page_option == "ATA Standings Dashboard":
+    # Mobile question
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
-page = st.session_state['page']
-
-# --- DASHBOARD PAGE ---
-if page == "ATA Standings":
-    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == True
+    # Filters
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
     district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
-
+    region_options = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
         region_options = [s.strip() for s in states_in_district.split(',')]
@@ -229,11 +226,10 @@ if page == "ATA Standings":
     else:
         region_choice = st.selectbox("Select Region:", REGIONS)
 
-    event_filter = st.selectbox("Filter by event (optional):", ["All"] + EVENT_NAMES)
+    event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
     go = st.button("Go")
-
     if go:
         with st.spinner("Loading standings..."):
             raw_data, has_results = gather_data(group_choice, region_choice, district_choice)
@@ -243,7 +239,7 @@ if page == "ATA Standings":
             st.warning(f"No standings data found for {region_choice or district_choice}.")
         else:
             for ev in EVENT_NAMES:
-                if event_filter != "All" and ev != event_filter:
+                if event_choice and ev != event_choice:
                     continue
                 rows = data.get(ev, [])
                 if name_filter:
@@ -251,18 +247,13 @@ if page == "ATA Standings":
                 if not rows:
                     continue
                 st.subheader(ev)
-                main_df = pd.DataFrame(rows)[["Rank","Name","Location","Points"]]
-                st.dataframe(main_df.reset_index(drop=True), use_container_width=True)
+                main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
+                st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
-# --- 50-59 TABLE PAGE ---
-if page == "1st Degree Black Belt Women 50-59":
-    st.subheader("1st Degree Black Belt Women 50-59 Table")
-    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == True
-
-    with st.spinner("Loading table..."):
-        df_50_59 = gather_50_59_table()
-
-    if not df_50_59.empty:
-        st.dataframe(df_50_59.drop(columns=["Location"]), use_container_width=True)
-    else:
+elif page_option == "1st Degree Black Belt Women 50-59":
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+    df_50_59 = gather_50_59_table()
+    if df_50_59.empty:
         st.warning("No competitors found.")
+    else:
+        st.dataframe(df_50_59.drop(columns=['Location']), use_container_width=True, hide_index=True)
