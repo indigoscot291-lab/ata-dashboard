@@ -7,10 +7,6 @@ import re
 # Page config
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
 
-# --- SESSION STATE FOR REFRESH ---
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = "Never"
-
 # --- CONFIG ---
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
@@ -29,6 +25,13 @@ GROUPS = {
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
         "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+    },
+    # ADDED: Color Belt Women 50-59 (no Google Sheet)
+    "Color Belt Women 50-59": {
+        "code": "WCOD",
+        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=WCOD",
+        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
+        "sheet_url": None
     }
 }
 
@@ -199,14 +202,6 @@ page_choice = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st De
 # --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
     st.title("ATA Standings Dashboard")
-    
-    # --- REFRESH BUTTON ---
-    if st.button("🔄 Refresh All Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
-    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
-    
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
     district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
@@ -303,14 +298,6 @@ if page_choice == "ATA Standings Dashboard":
 # --- PAGE 2: 50-59 Women ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
     st.title("1st Degree Black Belt Women 50-59")
-    
-    # --- REFRESH BUTTON ---
-    if st.button("🔄 Refresh All Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
-    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
-    
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
     group_key = "1st Degree Black Belt Women 50-59"
