@@ -29,6 +29,12 @@ GROUPS = {
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
         "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+    },
+    "50-59 Women Color Belts": {
+        "code": "WCOD",
+        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=WCOD",
+        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
+        "sheet_url": None  # no sheet for color belts
     }
 }
 
@@ -219,7 +225,12 @@ if page_choice == "ATA Standings Dashboard":
         region_choice = st.selectbox("Select Region:", REGIONS)
     event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-    sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+    
+    # fetch Google Sheet only if it exists
+    sheet_df = pd.DataFrame()
+    if GROUPS[group_choice]["sheet_url"]:
+        sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+    
     go = st.button("Go")
 
     if go:
