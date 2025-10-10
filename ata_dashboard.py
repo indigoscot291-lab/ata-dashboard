@@ -34,34 +34,27 @@ GROUPS = {
         "code": "WCOD",
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=WCOD",
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": None  # no sheet for color belts
+        "sheet_url": None
     }
 }
 
 REGION_CODES = {
-    # US states
-    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
-    "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
-    "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
-    "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
-    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"),
-    "Kansas": ("US", "KS"), "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"),
-    "Maine": ("US", "ME"), "Maryland": ("US", "MD"), "Massachusetts": ("US", "MA"),
-    "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
-    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"),
-    "Nevada": ("US", "NV"), "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"),
-    "New Mexico": ("US", "NM"), "New York": ("US", "NY"), "North Carolina": ("US", "NC"),
-    "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
-    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"),
-    "South Carolina": ("US", "SC"), "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"),
-    "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
-    "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
+    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"), "Arkansas": ("US", "AR"),
+    "California": ("US", "CA"), "Colorado": ("US", "CO"), "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"),
+    "Florida": ("US", "FL"), "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
+    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"), "Kansas": ("US", "KS"),
+    "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"), "Maine": ("US", "ME"), "Maryland": ("US", "MD"),
+    "Massachusetts": ("US", "MA"), "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
+    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"), "Nevada": ("US", "NV"),
+    "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"), "New Mexico": ("US", "NM"), "New York": ("US", "NY"),
+    "North Carolina": ("US", "NC"), "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
+    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"), "South Carolina": ("US", "SC"),
+    "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"), "Texas": ("US", "TX"), "Utah": ("US", "UT"),
+    "Vermont": ("US", "VT"), "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
     "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
-    # Canadian provinces
-    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
-    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
-    "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
-    "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
+    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"), "New Brunswick": ("CA", "NB"),
+    "Newfoundland and Labrador": ("CA", "NL"), "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"),
+    "Prince Edward Island": ("CA", "PE"), "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
 }
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
@@ -127,7 +120,6 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # determine regions to fetch
     regions_to_fetch = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
@@ -142,14 +134,12 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice == "International":
             regions_to_fetch = []
 
-    # fetch world data first
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # fetch state data
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -161,7 +151,6 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
 
-    # International filter
     if region_choice == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -205,14 +194,13 @@ page_choice = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st De
 # --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
     st.title("ATA Standings Dashboard")
-    
-    # --- REFRESH BUTTON ---
+
     if st.button("🔄 Refresh All Data"):
         st.cache_data.clear()
         st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
         st.success("Data refreshed successfully!")
     st.caption(f"Last refreshed: {st.session_state.last_refresh}")
-    
+
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
     group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
     district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
@@ -225,12 +213,11 @@ if page_choice == "ATA Standings Dashboard":
         region_choice = st.selectbox("Select Region:", REGIONS)
     event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-    
-    # fetch Google Sheet only if it exists
+
     sheet_df = pd.DataFrame()
     if GROUPS[group_choice]["sheet_url"]:
         sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-    
+
     go = st.button("Go")
 
     if go:
@@ -269,12 +256,34 @@ if page_choice == "ATA Standings Dashboard":
                 if not rows:
                     continue
 
-                st.subheader(ev)
+                # --- NEW RANK CALCULATION BY REGION/DISTRICT ---
+                if district_choice:
+                    rank_label = f"{district_choice} Rank"
+                elif region_choice and region_choice not in ["All", "International", ""]:
+                    rank_label = f"{region_choice} Rank"
+                else:
+                    rank_label = "World Rank"
+
+                sorted_rows = sorted(rows, key=lambda x: (-x["Points"], x["Name"]))
+                prev_points = None
+                prev_rank = None
+                current_pos = 1
+                for r in sorted_rows:
+                    if prev_points is None or r["Points"] != prev_points:
+                        rank_to_assign = current_pos
+                        r["Rank"] = rank_to_assign
+                        prev_rank = rank_to_assign
+                    else:
+                        r["Rank"] = prev_rank
+                    prev_points = r["Points"]
+                    current_pos += 1
+
+                st.subheader(f"{ev} — {rank_label}")
 
                 if is_mobile:
-                    main_df = pd.DataFrame(rows)[["Rank", "Name", "Location", "Points"]]
+                    main_df = pd.DataFrame(sorted_rows)[["Rank", "Name", "Location", "Points"]]
                     st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-                    for row in rows:
+                    for row in sorted_rows:
                         with st.expander(row["Name"]):
                             if not sheet_df.empty and ev in sheet_df.columns:
                                 comp_data = sheet_df[
@@ -293,7 +302,7 @@ if page_choice == "ATA Standings Dashboard":
                     cols_header[1].write("Name")
                     cols_header[2].write("Location")
                     cols_header[3].write("Points")
-                    for row in rows:
+                    for row in sorted_rows:
                         cols = st.columns([1, 5, 3, 2])
                         cols[0].write(row["Rank"])
                         with cols[1].expander(row["Name"]):
@@ -314,14 +323,13 @@ if page_choice == "ATA Standings Dashboard":
 # --- PAGE 2: 50-59 Women ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
     st.title("1st Degree Black Belt Women 50-59")
-    
-    # --- REFRESH BUTTON ---
+
     if st.button("🔄 Refresh All Data"):
         st.cache_data.clear()
         st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
         st.success("Data refreshed successfully!")
     st.caption(f"Last refreshed: {st.session_state.last_refresh}")
-    
+
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
     group_key = "1st Degree Black Belt Women 50-59"
@@ -351,17 +359,15 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
     df = df[cols]
     df = df.sort_values(by=["State", "Name"])
 
-    # Main table
     if is_mobile:
         st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
-    # --- Add counts per event in a table ---
     counts_df = pd.DataFrame({
         "Event": EVENT_NAMES,
         "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
     })
 
-    st.subheader("Competitors with points per event")
+    st.subheader("Competitor Counts by Event")
     st.dataframe(counts_df.reset_index(drop=True), use_container_width=True, hide_index=True)
