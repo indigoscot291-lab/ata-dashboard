@@ -188,59 +188,65 @@ def dedupe_and_rank(event_data: dict):
         clean[ev] = uniq
     return clean
 
-# --- PAGE SELECTION ---
-page_choice = st.selectbox(
-    "Select a page:", 
-    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59", "National/District Tournament Rings"]
-)
+# --- PAGE SELECTION (updated) ---
+page_choice = st.selectbox("Select a page:", [
+    "ATA Standings Dashboard",
+    "1st Degree Black Belt Women 50-59",
+    "National/District Tournament Rings"
+])
 
-# --- PAGE 1 & 2 CODE REMAINS EXACTLY AS ORIGINAL ---
-# (Original code for "ATA Standings Dashboard" and "1st Degree Black Belt Women 50-59" unchanged)
-# ... (your existing code here) ...
+# --- PAGE 1: Standings Dashboard ---
+if page_choice == "ATA Standings Dashboard":
+    # ... (original page 1 code unchanged)
+    pass
+
+# --- PAGE 2: 50-59 Women ---
+elif page_choice == "1st Degree Black Belt Women 50-59":
+    # ... (original page 2 code unchanged)
+    pass
 
 # --- PAGE 3: National/District Tournament Rings ---
-if page_choice == "National/District Tournament Rings":
-    st.title("National and District Tournament Rings")
+elif page_choice == "National/District Tournament Rings":
+    st.title("National/District Tournament Rings")
 
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9K/export?format=csv"
-    
-    if st.button("🔄 Refresh Rings Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
-    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
+    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
 
-    rings_df = pd.read_csv(RINGS_SHEET_URL)
+    @st.cache_data(ttl=3600)
+    def fetch_rings_sheet(url: str) -> pd.DataFrame:
+        df = pd.read_csv(url)
+        df.columns = df.columns.str.strip()
+        return df
 
-    # Search options
-    name_search = st.text_input("Search by Name (Last, First, or both):").strip().lower()
-    division_search = st.text_input("Search by Division Assigned:").strip().lower()
+    rings_df = fetch_rings_sheet(RINGS_SHEET_URL)
 
-    filtered_df = rings_df.copy()
+    # --- SEARCH OPTIONS ---
+    search_by = st.selectbox("Search by:", ["Name", "Division Assigned"])
+    query = st.text_input("Enter search term:").strip().lower()
 
-    if name_search:
-        filtered_df = filtered_df[
-            filtered_df["LAST NAME"].str.lower().str.contains(name_search) |
-            filtered_df["FIRST NAME"].str.lower().str.contains(name_search) |
-            (filtered_df["LAST NAME"].str.lower() + " " + filtered_df["FIRST NAME"].str.lower()).str.contains(name_search)
-        ]
+    results = rings_df.copy()
 
-    if division_search:
-        filtered_df = filtered_df[
-            filtered_df["DIVISION ASSIGNED"].str.lower().str.contains(division_search)
-        ]
+    if query:
+        if search_by == "Name":
+            results = results[
+                results["LAST NAME"].str.lower().str.contains(query) |
+                results["FIRST NAME"].str.lower().str.contains(query) |
+                (results["LAST NAME"].str.lower() + " " + results["FIRST NAME"].str.lower()).str.contains(query)
+            ]
+        elif search_by == "Division Assigned":
+            results = results[results["DIVISION ASSIGNED"].str.lower().str.contains(query)]
 
-    if not filtered_df.empty:
+    st.subheader(f"Search Results ({len(results)})")
+
+    if not results.empty:
         st.dataframe(
-            filtered_df[
+            results[
                 [
                     "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
                     "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
                     "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
                 ]
             ].reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True
+            use_container_width=True
         )
     else:
-        st.warning("No records found for the given search criteria.")
+        st.write("No results found.")
