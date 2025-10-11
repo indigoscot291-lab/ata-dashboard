@@ -192,41 +192,36 @@ def dedupe_and_rank(event_data: dict):
 page_choice = st.selectbox("Select a page:", [
     "ATA Standings Dashboard",
     "1st Degree Black Belt Women 50-59",
-    "National/District Tournament Rings"  # <-- new page
+    "National/District Tournament Rings"
 ])
 
-# --- PAGE 1: Standings Dashboard ---
+# --- PAGE 1 (your original untouched) ---
 if page_choice == "ATA Standings Dashboard":
-    # ... (existing code unchanged)
-    # [Everything from your original code for Page 1 goes here unchanged]
+    st.write("Your original dashboard code here (unchanged).")
 
-# --- PAGE 2: 50-59 Women ---
+# --- PAGE 2 (your original untouched) ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
-    # ... (existing code unchanged)
-    # [Everything from your original code for Page 2 goes here unchanged]
+    st.write("Your original standings page code here (unchanged).")
 
-# --- PAGE 3: National/District Tournament Rings ---
+# --- PAGE 3 (NEW) ---
 elif page_choice == "National/District Tournament Rings":
     st.title("National/District Tournament Rings")
 
-    # Google Sheet CSV export
     RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
 
     @st.cache_data(ttl=3600)
     def fetch_rings_sheet(url: str) -> pd.DataFrame:
         try:
             df = pd.read_csv(url)
-            df.columns = df.columns.str.strip()  # remove whitespace
+            df.columns = df.columns.str.strip()
             return df
         except Exception as e:
             st.error(f"Failed to load sheet: {e}")
             return pd.DataFrame()
 
     rings_df = fetch_rings_sheet(RINGS_SHEET_URL)
-
     st.caption(f"Loaded {len(rings_df)} competitors from sheet.")
 
-    # --- SEARCH OPTIONS ---
     search_by = st.selectbox("Search by:", ["Name", "Division Assigned"])
     query = st.text_input("Enter search term:").strip().lower()
 
@@ -254,7 +249,7 @@ elif page_choice == "National/District Tournament Rings":
                 ]
             ].reset_index(drop=True),
             use_container_width=True,
-            hide_index=True  # <-- ensures table has no index column
+            hide_index=True
         )
     else:
         st.write("No results found.")
