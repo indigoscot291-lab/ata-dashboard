@@ -1,17 +1,24 @@
+# app.py
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
+# -------------------
 # Page config
+# -------------------
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
 
-# --- SESSION STATE FOR REFRESH ---
+# -------------------
+# Session state for refresh
+# -------------------
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = "Never"
 
-# --- CONFIG ---
+# -------------------
+# Config
+# -------------------
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
@@ -34,35 +41,48 @@ GROUPS = {
         "code": "WCOD",
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=WCOD",
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": None
+        "sheet_url": None  # no sheet for color belts
     }
 }
 
 REGION_CODES = {
-    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"), "Arkansas": ("US", "AR"),
-    "California": ("US", "CA"), "Colorado": ("US", "CO"), "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"),
-    "Florida": ("US", "FL"), "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
-    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"), "Kansas": ("US", "KS"),
-    "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"), "Maine": ("US", "ME"), "Maryland": ("US", "MD"),
-    "Massachusetts": ("US", "MA"), "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
-    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"), "Nevada": ("US", "NV"),
-    "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"), "New Mexico": ("US", "NM"), "New York": ("US", "NY"),
-    "North Carolina": ("US", "NC"), "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
-    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"), "South Carolina": ("US", "SC"),
-    "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"), "Texas": ("US", "TX"), "Utah": ("US", "UT"),
-    "Vermont": ("US", "VT"), "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
+    # US states (same as before)
+    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
+    "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
+    "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
+    "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
+    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"),
+    "Kansas": ("US", "KS"), "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"),
+    "Maine": ("US", "ME"), "Maryland": ("US", "MD"), "Massachusetts": ("US", "MA"),
+    "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
+    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"),
+    "Nevada": ("US", "NV"), "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"),
+    "New Mexico": ("US", "NM"), "New York": ("US", "NY"), "North Carolina": ("US", "NC"),
+    "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
+    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"),
+    "South Carolina": ("US", "SC"), "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"),
+    "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
+    "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
     "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
-    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"), "New Brunswick": ("CA", "NB"),
-    "Newfoundland and Labrador": ("CA", "NL"), "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"),
-    "Prince Edward Island": ("CA", "PE"), "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
+    # Canada provinces (if used)
+    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
+    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
+    "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
+    "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
 }
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
+# District sheet (used to list states in each district)
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
-# --- HELPERS ---
+# Rings sheet (new)
+RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+
+# -------------------
+# Helpers & caching
+# -------------------
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
     try:
@@ -77,6 +97,7 @@ def fetch_html(url: str):
 def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(sheet_url)
+        # convert numeric event columns if present
         for ev in EVENT_NAMES:
             if ev in df.columns:
                 df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
@@ -85,6 +106,7 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def parse_standings(html: str):
+    """Return dict of event -> list of entries like {'Rank', 'Name', 'Points', 'Location'}"""
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
     headers = soup.find_all("ul", class_="tournament-header")
@@ -117,11 +139,14 @@ def parse_standings(html: str):
     return data
 
 def gather_data(group_key: str, region_choice: str, district_choice: str):
+    """Scrape world + states (if requested) and combine into dict of events"""
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
+    # Determine regions to fetch
     regions_to_fetch = []
     if district_choice:
+        # get states in district
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
         regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
         if region_choice:
@@ -134,12 +159,14 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice == "International":
             regions_to_fetch = []
 
+    # world
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
+    # state(s)
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -151,10 +178,12 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
 
+    # international filter (if user selected)
     if region_choice == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
+                # Location not ending with , XX (state code) -> treat as international
                 if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
                     intl[ev].append(e)
         combined = intl
@@ -163,6 +192,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     return combined, has_any
 
 def dedupe_and_rank(event_data: dict):
+    """Remove duplicates and assign world ranks (ties allowed)"""
     clean = {}
     for ev, entries in event_data.items():
         seen = set()
@@ -188,17 +218,20 @@ def dedupe_and_rank(event_data: dict):
         clean[ev] = uniq
     return clean
 
-# --- PAGE SELECTION ---
-page_choice = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59"])
+# -------------------
+# Page selector (single dropdown)
+# -------------------
+page_choice = st.selectbox("Select a page:", [
+    "ATA Standings Dashboard",
+    "1st Degree Black Belt Women 50-59",
+    "National & District Tournament Rings"
+])
 
-# --- PAGE 1: Standings Dashboard ---
+# -------------------
+# PAGE: ATA Standings Dashboard (keeps your previous behavior)
+# -------------------
 if page_choice == "ATA Standings Dashboard":
     st.title("ATA Standings Dashboard")
-
-    if st.button("🔄 Refresh All Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
     st.caption(f"Last refreshed: {st.session_state.last_refresh}")
 
     is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
@@ -214,9 +247,16 @@ if page_choice == "ATA Standings Dashboard":
     event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
     name_filter = st.text_input("Search competitor name (optional):").strip().lower()
 
+    # fetch Google Sheet only if it exists
     sheet_df = pd.DataFrame()
     if GROUPS[group_choice]["sheet_url"]:
         sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+
+    # refresh button for all
+    if st.button("🔄 Refresh All Data"):
+        st.cache_data.clear()
+        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.success("Data refreshed successfully!")
 
     go = st.button("Go")
 
@@ -233,7 +273,7 @@ if page_choice == "ATA Standings Dashboard":
                     continue
                 rows = data.get(ev, [])
 
-                # enforce region/district membership
+                # enforce region/district membership filtering
                 if district_choice:
                     if region_choice:
                         if region_choice in REGION_CODES:
@@ -256,7 +296,7 @@ if page_choice == "ATA Standings Dashboard":
                 if not rows:
                     continue
 
-                # --- NEW RANK CALCULATION BY REGION/DISTRICT ---
+                # Dynamic rank calculation based on selection
                 if district_choice:
                     rank_label = f"{district_choice} Rank"
                 elif region_choice and region_choice not in ["All", "International", ""]:
@@ -264,6 +304,7 @@ if page_choice == "ATA Standings Dashboard":
                 else:
                     rank_label = "World Rank"
 
+                # Recalculate ranks within the filtered subset
                 sorted_rows = sorted(rows, key=lambda x: (-x["Points"], x["Name"]))
                 prev_points = None
                 prev_rank = None
@@ -320,7 +361,9 @@ if page_choice == "ATA Standings Dashboard":
                         cols[2].write(row["Location"])
                         cols[3].write(row["Points"])
 
-# --- PAGE 2: 50-59 Women ---
+# -------------------
+# PAGE: 1st Degree Black Belt Women 50-59
+# -------------------
 elif page_choice == "1st Degree Black Belt Women 50-59":
     st.title("1st Degree Black Belt Women 50-59")
 
@@ -356,19 +399,84 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
             df["State"] = ""
 
     cols = ["State", "Name", "Location"] + EVENT_NAMES
-    df = df[cols]
-    df = df.sort_values(by=["State", "Name"])
+    # Ensure those columns exist (defensive)
+    cols = [c for c in cols if c in df.columns]
+    if cols:
+        df = df[cols]
+    df = df.sort_values(by=["State", "Name"], na_position="last")
 
     if is_mobile:
-        st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True), use_container_width=True, hide_index=True)
+        display_cols = ["State", "Name"] + [ev for ev in EVENT_NAMES if ev in df.columns]
+        st.dataframe(df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
+    # Counts per event
     counts_df = pd.DataFrame({
-        "Event": EVENT_NAMES,
-        "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
+        "Event": [ev for ev in EVENT_NAMES if ev in df.columns],
+        "Competitors with Points": [df[ev].eq("X").sum() if ev in df.columns else 0 for ev in EVENT_NAMES if ev in df.columns]
     })
-
-    st.subheader("Competitor Counts by Event")
+    st.subheader("Competitors with points per event")
     st.dataframe(counts_df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
+# -------------------
+# PAGE: National & District Tournament Rings
+# -------------------
+elif page_choice == "National & District Tournament Rings":
+    st.title("🏅 National & District Tournament Rings")
+    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
+
+    if st.button("🔄 Refresh Rings Data"):
+        st.cache_data.clear()
+        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.success("Ring data refreshed successfully!")
+
+    # Load rings data from Sheet1 (single tab)
+    rings_df = fetch_sheet(RINGS_SHEET_URL)  # fetch_sheet returns DataFrame or empty df
+
+    if rings_df.empty:
+        st.error("Unable to load tournament ring data. Please check the sheet link or internet access.")
+    else:
+        # Search options: by Name (Last + First) or by Division Assigned
+        search_type = st.radio("Search by:", ["Name", "Division Assigned"])
+
+        # target columns to display when results returned
+        display_cols = [
+            "Last Name", "First Name", "ATA Number", "Division Assigned",
+            "Traditional Forms", "Traditional Weapons", "Combat Weapons",
+            "Traditional Sparring", "Competition Day", "Ring Number", "Time"
+        ]
+
+        if search_type == "Name":
+            last_name = st.text_input("Last Name (or partial):").strip().lower()
+            first_name = st.text_input("First Name (optional):").strip().lower()
+            do_search = st.button("Search by Name")
+            if do_search:
+                if not last_name:
+                    st.warning("Please enter a last name (or partial) to search.")
+                else:
+                    results = rings_df[rings_df["Last Name"].astype(str).str.lower().str.contains(last_name, na=False)]
+                    if first_name:
+                        results = results[results["First Name"].astype(str).str.lower().str.contains(first_name, na=False)]
+                    if results.empty:
+                        st.warning("No matching competitors found.")
+                    else:
+                        out_cols = [c for c in display_cols if c in results.columns]
+                        st.dataframe(results[out_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+
+        elif search_type == "Division Assigned":
+            division_list = sorted(rings_df["Division Assigned"].dropna().unique())
+            division_choice = st.selectbox("Select Division:", [""] + division_list)
+            do_search = st.button("Search by Division")
+            if do_search:
+                if not division_choice:
+                    st.info("Please choose a division.")
+                else:
+                    results = rings_df[rings_df["Division Assigned"] == division_choice]
+                    if results.empty:
+                        st.warning("No competitors found for that division.")
+                    else:
+                        out_cols = [c for c in display_cols if c in results.columns]
+                        st.dataframe(results[out_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+
+# End of script
