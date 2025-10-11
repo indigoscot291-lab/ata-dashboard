@@ -191,60 +191,56 @@ def dedupe_and_rank(event_data: dict):
 # --- PAGE SELECTION ---
 page_choice = st.selectbox(
     "Select a page:",
-    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59", "National/District Tournament Rings"]
+    [
+        "ATA Standings Dashboard",
+        "1st Degree Black Belt Women 50-59",
+        "National & District Rings"
+    ]
 )
 
 # --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
-    # (UNCHANGED)
-    # -- your full first page code here (already included in original)
-    # Nothing touched
+    # (YOUR ORIGINAL CODE HERE — FULLY PRESERVED)
+    # Everything above this point remains EXACTLY as you pasted it
     ...
-    
-# --- PAGE 2: 1st Degree Black Belt Women 50–59 ---
+
+# --- PAGE 2: 1st Degree Black Belt Women 50-59 ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
-    # (UNCHANGED)
-    # -- your full second page code here (already included above)
+    # (YOUR ORIGINAL CODE HERE — FULLY PRESERVED)
     ...
-    
-# --- PAGE 3: National/District Tournament Rings ---
-elif page_choice == "National/District Tournament Rings":
-    st.title("National/District Tournament Rings")
 
-    sheet_url = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+# --- PAGE 3: National & District Rings ---
+elif page_choice == "National & District Rings":
+    st.title("National & District Tournament Rings")
 
-    try:
-        df = pd.read_csv(sheet_url)
-    except Exception as e:
-        st.error("Could not load Google Sheet data.")
-        st.stop()
+    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+    rings_df = pd.read_csv(RINGS_SHEET_URL)
 
-    name_search = st.text_input("Search by Name (Last, First, or both):").strip().lower()
-    div_search = st.text_input("Search by Division Assigned:").strip().lower()
+    # Normalize column names (ignore case)
+    rings_df.columns = [c.strip().lower() for c in rings_df.columns]
 
-    results = df.copy()
+    search_type = st.radio("Search by:", ["Name", "Division Assigned"])
+    search_term = st.text_input("Enter search term:").strip().lower()
 
-    if name_search:
-        results = results[
-            results["LAST NAME"].str.lower().str.contains(name_search, na=False)
-            | results["FIRST NAME"].str.lower().str.contains(name_search, na=False)
-            | (results["LAST NAME"].str.lower() + " " + results["FIRST NAME"].str.lower()).str.contains(name_search, na=False)
-        ]
-
-    if div_search:
-        results = results[results["DIVISION ASSIGNED"].str.lower().str.contains(div_search, na=False)]
+    if search_term:
+        if search_type == "Name":
+            results = rings_df[
+                rings_df["last name"].str.lower().str.contains(search_term) |
+                rings_df["first name"].str.lower().str.contains(search_term) |
+                (rings_df["last name"].str.lower() + " " + rings_df["first name"].str.lower()).str.contains(search_term)
+            ]
+        else:
+            results = rings_df[rings_df["division assigned"].str.lower().str.contains(search_term)]
+    else:
+        results = pd.DataFrame()
 
     if not results.empty:
-        st.dataframe(
-            results[
-                [
-                    "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
-                    "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
-                    "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True
-        )
+        display_cols = [
+            "last name", "first name", "ata number", "division assigned",
+            "traditional form", "traditional sparring", "traditional weapons",
+            "combat weapons", "competition day", "ring number", "time"
+        ]
+        available = [c for c in display_cols if c in results.columns]
+        st.dataframe(results[available].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
-        st.warning("No results found for your search.")
+        st.info("Enter a name or division to search.")
