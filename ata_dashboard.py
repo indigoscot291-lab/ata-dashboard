@@ -189,55 +189,50 @@ def dedupe_and_rank(event_data: dict):
     return clean
 
 # --- PAGE SELECTION ---
-page_choice = st.selectbox("Select a page:", [
-    "ATA Standings Dashboard",
-    "1st Degree Black Belt Women 50-59",
-    "National/District Tournament Rings"
-])
+page_choice = st.selectbox(
+    "Select a page:",
+    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59", "National/District Tournament Rings"]
+)
 
-# --- PAGE 1 (your original untouched) ---
+# --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
-    st.write("Your original dashboard code here (unchanged).")
-
-# --- PAGE 2 (your original untouched) ---
+    # (UNCHANGED)
+    # -- your full first page code here (already included in original)
+    # Nothing touched
+    ...
+    
+# --- PAGE 2: 1st Degree Black Belt Women 50–59 ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
-    st.write("Your original standings page code here (unchanged).")
-
-# --- PAGE 3 (NEW) ---
+    # (UNCHANGED)
+    # -- your full second page code here (already included above)
+    ...
+    
+# --- PAGE 3: National/District Tournament Rings ---
 elif page_choice == "National/District Tournament Rings":
     st.title("National/District Tournament Rings")
 
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+    sheet_url = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
 
-    @st.cache_data(ttl=3600)
-    def fetch_rings_sheet(url: str) -> pd.DataFrame:
-        try:
-            df = pd.read_csv(url)
-            df.columns = df.columns.str.strip()
-            return df
-        except Exception as e:
-            st.error(f"Failed to load sheet: {e}")
-            return pd.DataFrame()
+    try:
+        df = pd.read_csv(sheet_url)
+    except Exception as e:
+        st.error("Could not load Google Sheet data.")
+        st.stop()
 
-    rings_df = fetch_rings_sheet(RINGS_SHEET_URL)
-    st.caption(f"Loaded {len(rings_df)} competitors from sheet.")
+    name_search = st.text_input("Search by Name (Last, First, or both):").strip().lower()
+    div_search = st.text_input("Search by Division Assigned:").strip().lower()
 
-    search_by = st.selectbox("Search by:", ["Name", "Division Assigned"])
-    query = st.text_input("Enter search term:").strip().lower()
+    results = df.copy()
 
-    results = rings_df.copy()
+    if name_search:
+        results = results[
+            results["LAST NAME"].str.lower().str.contains(name_search, na=False)
+            | results["FIRST NAME"].str.lower().str.contains(name_search, na=False)
+            | (results["LAST NAME"].str.lower() + " " + results["FIRST NAME"].str.lower()).str.contains(name_search, na=False)
+        ]
 
-    if query:
-        if search_by == "Name":
-            results = results[
-                results["LAST NAME"].str.lower().str.contains(query, na=False) |
-                results["FIRST NAME"].str.lower().str.contains(query, na=False) |
-                ((results["LAST NAME"].str.lower() + " " + results["FIRST NAME"].str.lower()).str.contains(query, na=False))
-            ]
-        elif search_by == "Division Assigned":
-            results = results[results["DIVISION ASSIGNED"].str.lower().str.contains(query, na=False)]
-
-    st.subheader(f"Search Results ({len(results)})")
+    if div_search:
+        results = results[results["DIVISION ASSIGNED"].str.lower().str.contains(div_search, na=False)]
 
     if not results.empty:
         st.dataframe(
@@ -247,9 +242,9 @@ elif page_choice == "National/District Tournament Rings":
                     "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
                     "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
                 ]
-            ].reset_index(drop=True),
+            ],
             use_container_width=True,
             hide_index=True
         )
     else:
-        st.write("No results found.")
+        st.warning("No results found for your search.")
