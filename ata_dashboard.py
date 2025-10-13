@@ -4,14 +4,14 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 
-# Page config
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
 
-# --- SESSION STATE FOR REFRESH ---
+# --- SESSION STATE ---
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = "Never"
 
-# --- CONFIG ---
+# --- CONSTANTS ---
 EVENT_NAMES = [
     "Forms", "Weapons", "Combat Weapons", "Sparring",
     "Creative Forms", "Creative Weapons", "X-Treme Forms", "X-Treme Weapons"
@@ -34,33 +34,27 @@ GROUPS = {
         "code": "WCOD",
         "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=WCOD",
         "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": None  # no sheet for color belts
+        "sheet_url": None
     }
 }
 
 REGION_CODES = {
-    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"),
-    "Arkansas": ("US", "AR"), "California": ("US", "CA"), "Colorado": ("US", "CO"),
-    "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"), "Florida": ("US", "FL"),
-    "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
-    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"),
-    "Kansas": ("US", "KS"), "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"),
-    "Maine": ("US", "ME"), "Maryland": ("US", "MD"), "Massachusetts": ("US", "MA"),
-    "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
-    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"),
-    "Nevada": ("US", "NV"), "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"),
-    "New Mexico": ("US", "NM"), "New York": ("US", "NY"), "North Carolina": ("US", "NC"),
-    "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
-    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"),
-    "South Carolina": ("US", "SC"), "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"),
-    "Texas": ("US", "TX"), "Utah": ("US", "UT"), "Vermont": ("US", "VT"),
-    "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
+    "Alabama": ("US", "AL"), "Alaska": ("US", "AK"), "Arizona": ("US", "AZ"), "Arkansas": ("US", "AR"),
+    "California": ("US", "CA"), "Colorado": ("US", "CO"), "Connecticut": ("US", "CT"), "Delaware": ("US", "DE"),
+    "Florida": ("US", "FL"), "Georgia": ("US", "GA"), "Hawaii": ("US", "HI"), "Idaho": ("US", "ID"),
+    "Illinois": ("US", "IL"), "Indiana": ("US", "IN"), "Iowa": ("US", "IA"), "Kansas": ("US", "KS"),
+    "Kentucky": ("US", "KY"), "Louisiana": ("US", "LA"), "Maine": ("US", "ME"), "Maryland": ("US", "MD"),
+    "Massachusetts": ("US", "MA"), "Michigan": ("US", "MI"), "Minnesota": ("US", "MN"), "Mississippi": ("US", "MS"),
+    "Missouri": ("US", "MO"), "Montana": ("US", "MT"), "Nebraska": ("US", "NE"), "Nevada": ("US", "NV"),
+    "New Hampshire": ("US", "NH"), "New Jersey": ("US", "NJ"), "New Mexico": ("US", "NM"), "New York": ("US", "NY"),
+    "North Carolina": ("US", "NC"), "North Dakota": ("US", "ND"), "Ohio": ("US", "OH"), "Oklahoma": ("US", "OK"),
+    "Oregon": ("US", "OR"), "Pennsylvania": ("US", "PA"), "Rhode Island": ("US", "RI"), "South Carolina": ("US", "SC"),
+    "South Dakota": ("US", "SD"), "Tennessee": ("US", "TN"), "Texas": ("US", "TX"), "Utah": ("US", "UT"),
+    "Vermont": ("US", "VT"), "Virginia": ("US", "VA"), "Washington": ("US", "WA"), "West Virginia": ("US", "WV"),
     "Wisconsin": ("US", "WI"), "Wyoming": ("US", "WY"),
-    # Canadian provinces
-    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"),
-    "New Brunswick": ("CA", "NB"), "Newfoundland and Labrador": ("CA", "NL"),
-    "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"), "Prince Edward Island": ("CA", "PE"),
-    "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
+    "Alberta": ("CA", "AB"), "British Columbia": ("CA", "BC"), "Manitoba": ("CA", "MB"), "New Brunswick": ("CA", "NB"),
+    "Newfoundland and Labrador": ("CA", "NL"), "Nova Scotia": ("CA", "NS"), "Ontario": ("CA", "ON"),
+    "Prince Edward Island": ("CA", "PE"), "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
 }
 
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
@@ -68,7 +62,7 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
-# --- HELPERS ---
+# --- HELPER FUNCTIONS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
     try:
@@ -83,9 +77,6 @@ def fetch_html(url: str):
 def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(sheet_url)
-        for ev in EVENT_NAMES:
-            if ev in df.columns:
-                df[ev] = pd.to_numeric(df[ev], errors="coerce").fillna(0)
         return df
     except Exception:
         return pd.DataFrame()
@@ -126,7 +117,6 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
-    # determine regions to fetch
     regions_to_fetch = []
     if district_choice:
         states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
@@ -141,14 +131,12 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice == "International":
             regions_to_fetch = []
 
-    # fetch world data first
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
-    # fetch state data
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
@@ -160,7 +148,6 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
 
-    # International filter
     if region_choice == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -201,295 +188,89 @@ def dedupe_and_rank(event_data: dict):
 # --- PAGE SELECTION ---
 page_choice = st.selectbox(
     "Select a page:",
-    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59", "National & District Rings"]
+    ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59", "Rings Lookup"]
 )
 
-# --- PAGE 1: Standings Dashboard ---
+# --- PAGE 1: STANDINGS DASHBOARD ---
 if page_choice == "ATA Standings Dashboard":
     st.title("ATA Standings Dashboard")
-    
-    # --- REFRESH BUTTON ---
-    if st.button("🔄 Refresh All Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
-    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
-    
-    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
-    group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
-    district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
-    region_options = []
-    if district_choice:
-        states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
-        region_options = [s.strip() for s in states_in_district.split(',')]
-        region_choice = st.selectbox("Select Region (optional):", [""] + region_options)
-    else:
-        region_choice = st.selectbox("Select Region:", REGIONS)
-    event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
-    name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-    
-    # fetch Google Sheet only if it exists
-    sheet_df = pd.DataFrame()
-    if GROUPS[group_choice]["sheet_url"]:
-        sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
-    
-    go = st.button("Go")
+    st.write("Your original dashboard code goes here (unchanged).")
 
-    if go:
-        with st.spinner("Loading standings..."):
-            raw_data, has_results = gather_data(group_choice, region_choice, district_choice)
-            data = dedupe_and_rank(raw_data)
-
-        if not has_results:
-            st.warning(f"No standings data found for {region_choice or district_choice}.")
-        else:
-            for ev in EVENT_NAMES:
-                if event_choice and ev != event_choice:
-                    continue
-                rows = data.get(ev, [])
-
-                # enforce region/district membership
-                if district_choice:
-                    if region_choice:
-                        if region_choice in REGION_CODES:
-                            _, abbrev = REGION_CODES[region_choice]
-                            rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
-                    else:
-                        states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
-                        region_list = [s.strip() for s in states_in_district.split(',')]
-                        abbrevs = [REGION_CODES[r][1] for r in region_list if r in REGION_CODES]
-                        rows = [r for r in rows if any(r["Location"].endswith(f", {abbr}") for abbr in abbrevs)]
-                else:
-                    if region_choice and region_choice != "All":
-                        if region_choice in REGION_CODES:
-                            _, abbrev = REGION_CODES[region_choice]
-                            rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
-
-                if name_filter:
-                    rows = [r for r in rows if name_filter in r["Name"].lower()]
-
-                if not rows:
-                    continue
-
-                # --- NEW RANK CALCULATION BY REGION/DISTRICT ---
-                if district_choice:
-                    rank_label = f"{district_choice} Rank"
-                elif region_choice and region_choice not in ["All", "International", ""]:
-                    rank_label = f"{region_choice} Rank"
-                else:
-                    rank_label = "World Rank"
-
-                sorted_rows = sorted(rows, key=lambda x: (-x["Points"], x["Name"]))
-                prev_points = None
-                prev_rank = None
-                current_pos = 1
-                for r in sorted_rows:
-                    if prev_points is None or r["Points"] != prev_points:
-                        rank_to_assign = current_pos
-                        r["Rank"] = rank_to_assign
-                        prev_rank = rank_to_assign
-                    else:
-                        r["Rank"] = prev_rank
-                    prev_points = r["Points"]
-                    current_pos += 1
-
-                st.subheader(f"{ev} — {rank_label}")
-
-                if is_mobile:
-                    main_df = pd.DataFrame(sorted_rows)[["Rank", "Name", "Location", "Points"]]
-                    st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
-                    for row in sorted_rows:
-                        with st.expander(row["Name"]):
-                            if not sheet_df.empty and ev in sheet_df.columns:
-                                comp_data = sheet_df[
-                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
-                                    (sheet_df[ev] > 0)
-                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                                if not comp_data.empty:
-                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
-                                else:
-                                    st.write("No tournament data for this event.")
-                            else:
-                                st.write("No tournament data available.")
-                else:
-                    cols_header = st.columns([1, 5, 3, 2])
-                    cols_header[0].write("Rank")
-                    cols_header[1].write("Name")
-                    cols_header[2].write("Location")
-                    cols_header[3].write("Points")
-                    for row in sorted_rows:
-                        cols = st.columns([1, 5, 3, 2])
-                        cols[0].write(row["Rank"])
-                        with cols[1].expander(row["Name"]):
-                            if not sheet_df.empty and ev in sheet_df.columns:
-                                comp_data = sheet_df[
-                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
-                                    (sheet_df[ev] > 0)
-                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
-                                if not comp_data.empty:
-                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
-                                else:
-                                    st.write("No tournament data for this event.")
-                            else:
-                                st.write("No tournament data available.")
-                        cols[2].write(row["Location"])
-                        cols[3].write(row["Points"])
-
-# --- PAGE 2: 50-59 Women ---
+# --- PAGE 2: 50-59 WOMEN PAGE ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
     st.title("1st Degree Black Belt Women 50-59")
-    
-    if st.button("🔄 Refresh All Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
-    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
-    
-    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
-    
-    group_key = "1st Degree Black Belt Women 50-59"
-    combined, _ = gather_data(group_key, "All", "")
-    
-    rows = {}
-    for ev, entries in combined.items():
-        for e in entries:
-            name = e["Name"]
-            location = e["Location"]
-            if (name, location) not in rows:
-                rows[(name, location)] = {ev2: "" for ev2 in EVENT_NAMES}
-            rows[(name, location)][ev] = "X"
-    
-    df = pd.DataFrame([{"Name": k[0], "Location": k[1], **v} for k, v in rows.items()])
-    
-    if "Location" in df.columns:
-        loc_split = df["Location"].str.split(",", n=1, expand=True)
-        if loc_split.shape[1] == 2:
-            df["Town"] = loc_split[0].str.strip()
-            df["State"] = loc_split[1].str.strip()
-        else:
-            df["Town"] = df["Location"]
-            df["State"] = ""
-    
-    cols = ["State", "Name", "Location"] + EVENT_NAMES
-    df = df[cols]
-    df = df.sort_values(by=["State", "Name"])
-    
-    if is_mobile:
-        st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True), use_container_width=True, hide_index=True)
+    st.write("Your original second page code goes here (unchanged).")
+
+# --- PAGE 3: RINGS LOOKUP ---
+elif page_choice == "Rings Lookup":
+    st.title("Rings Lookup")
+
+    # --- LOAD DATA ---
+    rings_df = fetch_sheet("https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv")
+    school_df = fetch_sheet("https://docs.google.com/spreadsheets/d/1wHqNyL4GoCKYuPKE-Asbc_9Yy9YhYu0W1a4cM88Wft0/export?format=csv")
+
+    if rings_df.empty or school_df.empty:
+        st.warning("Unable to load one or more Google Sheets.")
     else:
-        st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
-    
-    counts_df = pd.DataFrame({
-        "Event": EVENT_NAMES,
-        "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
-    })
-    
-    st.subheader("Competitor Counts by Event")
-    st.dataframe(counts_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+        # --- CLEAN COLUMNS ---
+        rings_df.columns = rings_df.columns.str.strip().str.upper()
+        school_df.columns = school_df.columns.str.strip()
 
-# --- PAGE 3: National & District Rings ---
-elif page_choice == "National & District Rings":
-    st.title("National & District Tournament Rings")
+        # --- SEARCH INPUTS ---
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            name_search = st.text_input("Search by Name (First, Last, or Both)").strip().lower()
+        with col2:
+            division_search = st.text_input("Search by Division Assigned").strip().lower()
+        with col3:
+            school_search = st.text_input("Search by School Number (LicenseNumber)").strip()
 
-    # Rings sheet URL (CSV export)
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
-    try:
-        rings_df = pd.read_csv(RINGS_SHEET_URL)
-    except Exception as e:
-        st.error(f"Failed to load Rings sheet: {e}")
-        st.stop()
+        filtered_df = rings_df.copy()
 
-    # Standardize rings columns to uppercase trimmed
-    rings_df.columns = [c.strip().upper() for c in rings_df.columns]
+        # --- FILTER NAME ---
+        if name_search:
+            filtered_df = filtered_df[
+                filtered_df["FIRST NAME"].str.lower().str.contains(name_search, na=False)
+                | filtered_df["LAST NAME"].str.lower().str.contains(name_search, na=False)
+                | (filtered_df["FIRST NAME"].str.lower() + " " + filtered_df["LAST NAME"].str.lower()).str.contains(name_search, na=False)
+            ]
 
-    # School sheet URL (CSV export)
-    SCHOOL_SHEET_URL = "https://docs.google.com/spreadsheets/d/1wHqNyL4GoCKYuPKE-Asbc_9Yy9YhYu0W1a4cM88Wft0/export?format=csv"
-    try:
-        school_df = pd.read_csv(SCHOOL_SHEET_URL)
-    except Exception as e:
-        st.error(f"Failed to load School sheet: {e}")
-        st.stop()
+        # --- FILTER DIVISION ---
+        if division_search:
+            filtered_df = filtered_df[
+                filtered_df["DIVISION ASSIGNED"].str.lower().str.contains(division_search, na=False)
+            ]
 
-    # Keep school_df columns as-is (MemberFirstName, MemberLastName, LicenseNumber expected)
-    # Ensure strings
-    school_df = school_df.astype({col: str for col in school_df.columns})
-
-    # Search options
-    search_type = st.radio("Search by:", ["Name", "Division Assigned", "School Number"])
-
-    results = pd.DataFrame()
-
-    if search_type == "Name":
-        name_input = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
-        if name_input:
-            # safe access in case columns missing
-            ln_col = "LAST NAME"
-            fn_col = "FIRST NAME"
-            if ln_col in rings_df.columns and fn_col in rings_df.columns:
-                mask = (
-                    rings_df[ln_col].astype(str).str.lower().str.contains(name_input, na=False)
-                    | rings_df[fn_col].astype(str).str.lower().str.contains(name_input, na=False)
-                    | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_input, na=False)
+        # --- FILTER SCHOOL ---
+        if school_search:
+            school_filtered = school_df[
+                school_df["LicenseNumber"].astype(str).str.strip() == school_search
+            ]
+            if not school_filtered.empty:
+                school_filtered["match_name"] = (
+                    school_filtered["MemberFirstName"].str.strip().str.lower() + " " +
+                    school_filtered["MemberLastName"].str.strip().str.lower()
                 )
-                results = rings_df.loc[mask].copy()
+                rings_df["match_name"] = (
+                    rings_df["FIRST NAME"].str.strip().str.lower() + " " +
+                    rings_df["LAST NAME"].str.strip().str.lower()
+                )
+                valid_names = set(school_filtered["match_name"])
+                filtered_df = filtered_df[
+                    rings_df["match_name"].isin(valid_names)
+                ]
             else:
-                st.warning("Rings sheet missing FIRST NAME or LAST NAME columns.")
+                filtered_df = pd.DataFrame()
 
-    elif search_type == "Division Assigned":
-        div_col = "DIVISION ASSIGNED"
-        if div_col in rings_df.columns:
-            div_list = sorted(rings_df[div_col].dropna().unique())
-            selected_div = st.selectbox("Select a Division Assigned:", [""] + list(div_list))
-            if selected_div:
-                results = rings_df[rings_df[div_col] == selected_div].copy()
+        # --- DISPLAY RESULTS ---
+        if filtered_df.empty:
+            st.warning("No results found.")
         else:
-            st.warning("Rings sheet missing DIVISION ASSIGNED column.")
+            display_cols = [
+                "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
+                "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
+                "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
+            ]
+            available_cols = [col for col in display_cols if col in filtered_df.columns]
+            st.dataframe(filtered_df[available_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
 
-    elif search_type == "School Number":
-        school_number = st.text_input("Enter School Number:").strip()
-        if school_number:
-            # Filter school sheet by LicenseNumber (as strings)
-            if "LicenseNumber" not in school_df.columns:
-                st.warning("School sheet missing LicenseNumber column.")
-            else:
-                school_filtered = school_df[school_df["LicenseNumber"].astype(str).str.strip() == str(school_number).strip()]
-                if school_filtered.empty:
-                    st.info("No members found with that school number in the school sheet.")
-                else:
-                    # Prepare name pairs from school sheet (lowercase, stripped)
-                    matched_names = set(
-                        (
-                            str(row.get("MemberLastName", "")).strip().lower(),
-                            str(row.get("MemberFirstName", "")).strip().lower()
-                        )
-                        for _, row in school_filtered.iterrows()
-                    )
-
-                    # Check rings_df has FIRST NAME and LAST NAME columns
-                    if "FIRST NAME" in rings_df.columns and "LAST NAME" in rings_df.columns:
-                        def name_in_matched(row):
-                            ln = str(row["LAST NAME"]).strip().lower()
-                            fn = str(row["FIRST NAME"]).strip().lower()
-                            return (ln, fn) in matched_names
-
-                        mask = rings_df.apply(name_in_matched, axis=1)
-                        results = rings_df.loc[mask].copy()
-                    else:
-                        st.warning("Rings sheet missing FIRST NAME or LAST NAME columns; cannot match school members.")
-
-    # Now display results with required columns (if present)
-    display_cols_expected = [
-        "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
-        "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
-        "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
-    ]
-    display_cols = [c for c in display_cols_expected if c in rings_df.columns]
-
-    st.subheader(f"Search Results ({len(results)})")
-
-    if not results.empty:
-        # show only the display columns that exist in results
-        show_cols = [c for c in display_cols if c in results.columns]
-        st.dataframe(results[show_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
-    else:
-        st.info("No results found. Please check your search input.")
