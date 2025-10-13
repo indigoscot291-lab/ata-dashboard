@@ -200,15 +200,184 @@ page_choice = st.selectbox(
 
 # --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
-    # (unchanged)
     st.title("ATA Standings Dashboard")
-    # ... your existing dashboard code remains exactly as-is ...
+
+    if st.button("🔄 Refresh All Data"):
+        st.cache_data.clear()
+        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.success("Data refreshed successfully!")
+    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
+
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+    group_choice = st.selectbox("Select group:", list(GROUPS.keys()))
+    district_choice = st.selectbox("Select District (optional):", [""] + sorted(district_df['District'].unique()))
+    region_options = []
+    if district_choice:
+        states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
+        region_options = [s.strip() for s in states_in_district.split(',')]
+        region_choice = st.selectbox("Select Region (optional):", [""] + region_options)
+    else:
+        region_choice = st.selectbox("Select Region:", REGIONS)
+    event_choice = st.selectbox("Select Event (optional):", [""] + EVENT_NAMES)
+    name_filter = st.text_input("Search competitor name (optional):").strip().lower()
+
+    sheet_df = pd.DataFrame()
+    if GROUPS[group_choice]["sheet_url"]:
+        sheet_df = fetch_sheet(GROUPS[group_choice]["sheet_url"])
+
+    go = st.button("Go")
+
+    if go:
+        with st.spinner("Loading standings..."):
+            raw_data, has_results = gather_data(group_choice, region_choice, district_choice)
+            data = dedupe_and_rank(raw_data)
+
+        if not has_results:
+            st.warning(f"No standings data found for {region_choice or district_choice}.")
+        else:
+            for ev in EVENT_NAMES:
+                if event_choice and ev != event_choice:
+                    continue
+                rows = data.get(ev, [])
+
+                # enforce region/district membership
+                if district_choice:
+                    if region_choice:
+                        if region_choice in REGION_CODES:
+                            _, abbrev = REGION_CODES[region_choice]
+                            rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
+                    else:
+                        states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
+                        region_list = [s.strip() for s in states_in_district.split(',')]
+                        abbrevs = [REGION_CODES[r][1] for r in region_list if r in REGION_CODES]
+                        rows = [r for r in rows if any(r["Location"].endswith(f", {abbr}") for abbr in abbrevs)]
+                else:
+                    if region_choice and region_choice != "All":
+                        if region_choice in REGION_CODES:
+                            _, abbrev = REGION_CODES[region_choice]
+                            rows = [r for r in rows if r["Location"].endswith(f", {abbrev}")]
+
+                if name_filter:
+                    rows = [r for r in rows if name_filter in r["Name"].lower()]
+
+                if not rows:
+                    continue
+
+                # --- NEW RANK CALCULATION BY REGION/DISTRICT ---
+                if district_choice:
+                    rank_label = f"{district_choice} Rank"
+                elif region_choice and region_choice not in ["All", "International", ""]:
+                    rank_label = f"{region_choice} Rank"
+                else:
+                    rank_label = "World Rank"
+
+                sorted_rows = sorted(rows, key=lambda x: (-x["Points"], x["Name"]))
+                prev_points = None
+                prev_rank = None
+                current_pos = 1
+                for r in sorted_rows:
+                    if prev_points is None or r["Points"] != prev_points:
+                        rank_to_assign = current_pos
+                        r["Rank"] = rank_to_assign
+                        prev_rank = rank_to_assign
+                    else:
+                        r["Rank"] = prev_rank
+                    prev_points = r["Points"]
+                    current_pos += 1
+
+                st.subheader(f"{ev} — {rank_label}")
+
+                if is_mobile:
+                    main_df = pd.DataFrame(sorted_rows)[["Rank", "Name", "Location", "Points"]]
+                    st.dataframe(main_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+                    for row in sorted_rows:
+                        with st.expander(row["Name"]):
+                            if not sheet_df.empty and ev in sheet_df.columns:
+                                comp_data = sheet_df[
+                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
+                                    (sheet_df[ev] > 0)
+                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
+                                if not comp_data.empty:
+                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
+                                else:
+                                    st.write("No tournament data for this event.")
+                            else:
+                                st.write("No tournament data available.")
+                else:
+                    cols_header = st.columns([1, 5, 3, 2])
+                    cols_header[0].write("Rank")
+                    cols_header[1].write("Name")
+                    cols_header[2].write("Location")
+                    cols_header[3].write("Points")
+                    for row in sorted_rows:
+                        cols = st.columns([1, 5, 3, 2])
+                        cols[0].write(row["Rank"])
+                        with cols[1].expander(row["Name"]):
+                            if not sheet_df.empty and ev in sheet_df.columns:
+                                comp_data = sheet_df[
+                                    (sheet_df['Name'].str.lower().str.strip() == row['Name'].lower().strip()) &
+                                    (sheet_df[ev] > 0)
+                                ][["Date", "Tournament", ev, "Type"]].rename(columns={ev: "Points"})
+                                if not comp_data.empty:
+                                    st.dataframe(comp_data.reset_index(drop=True), use_container_width=True, hide_index=True)
+                                else:
+                                    st.write("No tournament data for this event.")
+                            else:
+                                st.write("No tournament data available.")
+                        cols[2].write(row["Location"])
+                        cols[3].write(row["Points"])
 
 # --- PAGE 2: 50-59 Women ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
-    # (unchanged)
     st.title("1st Degree Black Belt Women 50-59")
-    # ... your existing 50-59 page code remains exactly as-is ...
+
+    if st.button("🔄 Refresh All Data"):
+        st.cache_data.clear()
+        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.success("Data refreshed successfully!")
+    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
+
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+
+    group_key = "1st Degree Black Belt Women 50-59"
+    combined, _ = gather_data(group_key, "All", "")
+
+    rows = {}
+    for ev, entries in combined.items():
+        for e in entries:
+            name = e["Name"]
+            location = e["Location"]
+            if (name, location) not in rows:
+                rows[(name, location)] = {ev2: "" for ev2 in EVENT_NAMES}
+            rows[(name, location)][ev] = "X"
+
+    df = pd.DataFrame([{"Name": k[0], "Location": k[1], **v} for k, v in rows.items()])
+
+    if "Location" in df.columns:
+        loc_split = df["Location"].str.split(",", n=1, expand=True)
+        if loc_split.shape[1] == 2:
+            df["Town"] = loc_split[0].str.strip()
+            df["State"] = loc_split[1].str.strip()
+        else:
+            df["Town"] = df["Location"]
+            df["State"] = ""
+
+    cols = ["State", "Name", "Location"] + EVENT_NAMES
+    df = df[cols]
+    df = df.sort_values(by=["State", "Name"])
+
+    if is_mobile:
+        st.dataframe(df[["State", "Name"] + EVENT_NAMES].reset_index(drop=True), use_container_width=True, hide_index=True)
+    else:
+        st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
+
+    counts_df = pd.DataFrame({
+        "Event": EVENT_NAMES,
+        "Competitors with Points": [df[ev].eq("X").sum() for ev in EVENT_NAMES]
+    })
+
+    st.subheader("Competitor Counts by Event")
+    st.dataframe(counts_df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
 # --- PAGE 3: National & District Rings ---
 elif page_choice == "National & District Rings":
@@ -231,54 +400,52 @@ elif page_choice == "National & District Rings":
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
 
-    # Normalize columns
+    # Normalize columns for Rings
     col_map = {col.strip().upper(): col for col in rings_df.columns}
-    expected = [
+    expected_cols = [
         "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
         "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
         "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
     ]
-    display_cols = [col_map[c] for c in expected if c in col_map]
+    missing_cols = [c for c in expected_cols if c not in col_map]
+    if missing_cols:
+        st.warning(f"Warning: missing columns in Rings sheet: {missing_cols}")
 
-    st.subheader("Filters")
-
-    name_query = st.text_input("Name (partial or full):").strip().lower()
+    # Inputs: Name, Division Assigned, or School Number
+    name_query = st.text_input("Search by Name (partial or full, Last or First)").strip().lower()
     div_col = col_map.get("DIVISION ASSIGNED")
-    divisions = sorted(rings_df[div_col].dropna().astype(str).unique()) if div_col else []
-    sel_div = st.selectbox("Division Assigned:", [""] + divisions)
-    school_query = st.text_input("School Number:").strip()
+    div_options = sorted(rings_df[div_col].dropna().astype(str).unique()) if div_col else []
+    sel_div = st.selectbox("Filter by Division Assigned:", [""] + div_options)
 
-    filtered_df = rings_df.copy()
+    school_nums = sorted(members_df['School Number'].dropna().astype(str).unique())
+    sel_school = st.selectbox("Filter by School Number:", [""] + school_nums)
 
-    # --- NAME FILTER ---
-    if name_query:
-        ln_col = col_map.get("LAST NAME")
-        fn_col = col_map.get("FIRST NAME")
-        if ln_col and fn_col:
-            mask = (
-                rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
-                | rings_df[fn_col].astype(str).str.lower().str.contains(name_query, na=False)
-                | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
-            )
-            filtered_df = filtered_df.loc[mask]
+    # Filter rings_df
+    results = rings_df.copy()
 
-    # --- DIVISION FILTER ---
+    ln_col = col_map.get("LAST NAME")
+    fn_col = col_map.get("FIRST NAME")
+
+    if name_query and ln_col and fn_col:
+        mask = (
+            results[ln_col].astype(str).str.lower().str.contains(name_query, na=False) |
+            results[fn_col].astype(str).str.lower().str.contains(name_query, na=False) |
+            (results[ln_col].astype(str).str.lower() + " " + results[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
+        )
+        results = results.loc[mask]
+
     if sel_div and div_col:
-        filtered_df = filtered_df[filtered_df[div_col].astype(str) == sel_div]
+        results = results[results[div_col].astype(str) == sel_div]
 
-    # --- SCHOOL FILTER ---
-    if school_query:
-        members_df['LicenseNumber'] = members_df['LicenseNumber'].astype(str).str.strip()
-        members_df['FullName'] = (members_df['MemberFirstName'].str.strip() + " " + members_df['MemberLastName'].str.strip()).str.lower()
-        member_names = members_df[members_df['LicenseNumber'] == school_query]['FullName'].tolist()
-        ln_col = col_map.get("LAST NAME")
-        fn_col = col_map.get("FIRST NAME")
-        filtered_df['FullName'] = (filtered_df[fn_col].astype(str).str.strip() + " " + filtered_df[ln_col].astype(str).str.strip()).str.lower()
-        filtered_df = filtered_df[filtered_df['FullName'].isin(member_names)]
-        filtered_df = filtered_df.drop(columns=['FullName'])
+    if sel_school:
+        # Filter members for selected school
+        members_in_school = members_df[members_df['School Number'].astype(str) == sel_school]['ATA Number'].astype(str).tolist()
+        results = results[results[col_map.get("ATA NUMBER")].astype(str).isin(members_in_school)]
 
-    st.subheader(f"Search Results ({len(filtered_df)})")
-    if not filtered_df.empty:
-        st.dataframe(filtered_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+    display_cols = [col_map[c] for c in expected_cols if c in col_map]
+
+    st.subheader(f"Search Results ({len(results)})")
+    if not results.empty:
+        st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
-        st.info("No results found. Use a filter or select a division/school.")
+        st.info("No results found. Enter search terms or select filters.")
