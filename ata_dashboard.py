@@ -384,7 +384,7 @@ elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
     RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
-    MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_MEMBER_SHEET_ID/export?format=csv"  # replace with your Members sheet URL
+    MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1wHqNyL4GoCKYuPKE-Asbc_9Yy9YhYu0W1a4cM88Wft0/edit?usp=sharing"  
 
     # Load sheets safely
     try:
@@ -465,3 +465,4 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or provide a school number.")
+
