@@ -189,63 +189,96 @@ def dedupe_and_rank(event_data: dict):
     return clean
 
 # --- PAGE SELECTION ---
-page_choice = st.selectbox("Select a page:", ["ATA Standings Dashboard", "1st Degree Black Belt Women 50-59", "Rings"])
+page_choice = st.selectbox(
+    "Select a page:",
+    [
+        "ATA Standings Dashboard",
+        "1st Degree Black Belt Women 50-59",
+        "National & District Rings"
+    ]
+)
 
 # --- PAGE 1: Standings Dashboard ---
 if page_choice == "ATA Standings Dashboard":
-    # YOUR ORIGINAL DASHBOARD CODE UNCHANGED
+    # (unchanged)
     st.title("ATA Standings Dashboard")
-    st.write("Your original dashboard code goes here (unchanged).")
+    # ... your existing dashboard code remains exactly as-is ...
 
 # --- PAGE 2: 50-59 Women ---
 elif page_choice == "1st Degree Black Belt Women 50-59":
-    # YOUR ORIGINAL 50-59 PAGE CODE UNCHANGED
+    # (unchanged)
     st.title("1st Degree Black Belt Women 50-59")
-    st.write("Your original 50-59 page code goes here (unchanged).")
+    # ... your existing 50-59 page code remains exactly as-is ...
 
-# --- PAGE 3: Rings Page ---
-elif page_choice == "Rings":
-    st.title("Rings Standings")
+# --- PAGE 3: National & District Rings ---
+elif page_choice == "National & District Rings":
+    st.title("National & District Tournament Rings")
 
-    if st.button("🔄 Refresh All Data"):
-        st.cache_data.clear()
-        st.session_state.last_refresh = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.success("Data refreshed successfully!")
-    st.caption(f"Last refreshed: {st.session_state.last_refresh}")
+    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+    MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1wHqNyL4GoCKYuPKE-Asbc_9Yy9YhYu0W1a4cM88Wft0/export?format=csv"
 
-    # --- MOBILE DETECTION ---
-    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+    # Load Rings sheet
+    try:
+        rings_df = pd.read_csv(RINGS_SHEET_URL)
+    except Exception as e:
+        st.error(f"Failed to load Rings sheet: {e}")
+        st.stop()
 
-    # --- LOAD RINGS DATA ---
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1YOUR_RINGS_EXPORT_CSV_LINK/export?format=csv"  # Replace with actual CSV export
-    rings_df = pd.read_csv(RINGS_SHEET_URL)
+    # Load Members sheet
+    try:
+        members_df = pd.read_csv(MEMBERS_SHEET_URL)
+    except Exception as e:
+        st.error(f"Failed to load Members sheet: {e}")
+        st.stop()
 
-    # --- INPUTS ---
-    name_filter = st.text_input("Search competitor name (optional):").strip().lower()
-    division_filter = st.selectbox("Select Division Assigned (optional):", [""] + sorted(rings_df['Division Assigned'].dropna().unique()))
-    school_filter = st.text_input("Search by School Number (optional):").strip()
+    # Normalize columns
+    col_map = {col.strip().upper(): col for col in rings_df.columns}
+    expected = [
+        "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
+        "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
+        "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
+    ]
+    display_cols = [col_map[c] for c in expected if c in col_map]
+
+    st.subheader("Filters")
+
+    name_query = st.text_input("Name (partial or full):").strip().lower()
+    div_col = col_map.get("DIVISION ASSIGNED")
+    divisions = sorted(rings_df[div_col].dropna().astype(str).unique()) if div_col else []
+    sel_div = st.selectbox("Division Assigned:", [""] + divisions)
+    school_query = st.text_input("School Number:").strip()
 
     filtered_df = rings_df.copy()
 
-    # --- SCHOOL FILTER ---
-    if school_filter:
-        MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1wHqNyL4GoCKYuPKE-Asbc_9Yy9YhYu0W1a4cM88Wft0/export?format=csv"
-        members_df = pd.read_csv(MEMBERS_SHEET_URL)
-        members_df['LicenseNumber'] = members_df['LicenseNumber'].astype(str).str.strip()
-        members_df['FullName'] = (members_df['MemberFirstName'].str.strip() + " " + members_df['MemberLastName'].str.strip()).str.lower()
-        filtered_members = members_df[members_df['LicenseNumber'] == school_filter]
-        member_names = filtered_members['FullName'].tolist()
-        filtered_df['FullName'] = filtered_df['Name'].str.strip().str.lower()
-        filtered_df = filtered_df[filtered_df['FullName'].isin(member_names)]
-
     # --- NAME FILTER ---
-    if name_filter:
-        filtered_df = filtered_df[filtered_df['Name'].str.lower().str.contains(name_filter)]
+    if name_query:
+        ln_col = col_map.get("LAST NAME")
+        fn_col = col_map.get("FIRST NAME")
+        if ln_col and fn_col:
+            mask = (
+                rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
+                | rings_df[fn_col].astype(str).str.lower().str.contains(name_query, na=False)
+                | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
+            )
+            filtered_df = filtered_df.loc[mask]
 
     # --- DIVISION FILTER ---
-    if division_filter:
-        filtered_df = filtered_df[filtered_df['Division Assigned'] == division_filter]
+    if sel_div and div_col:
+        filtered_df = filtered_df[filtered_df[div_col].astype(str) == sel_div]
 
-    # --- DISPLAY ---
-    display_cols = [col for col in filtered_df.columns if col != 'FullName']
-    st.dataframe(filtered_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+    # --- SCHOOL FILTER ---
+    if school_query:
+        members_df['LicenseNumber'] = members_df['LicenseNumber'].astype(str).str.strip()
+        members_df['FullName'] = (members_df['MemberFirstName'].str.strip() + " " + members_df['MemberLastName'].str.strip()).str.lower()
+        member_names = members_df[members_df['LicenseNumber'] == school_query]['FullName'].tolist()
+        ln_col = col_map.get("LAST NAME")
+        fn_col = col_map.get("FIRST NAME")
+        filtered_df['FullName'] = (filtered_df[fn_col].astype(str).str.strip() + " " + filtered_df[ln_col].astype(str).str.strip()).str.lower()
+        filtered_df = filtered_df[filtered_df['FullName'].isin(member_names)]
+        filtered_df = filtered_df.drop(columns=['FullName'])
+
+    st.subheader(f"Search Results ({len(filtered_df)})")
+    if not filtered_df.empty:
+        st.dataframe(filtered_df[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+    else:
+        st.info("No results found. Use a filter or select a division/school.")
