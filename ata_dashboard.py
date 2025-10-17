@@ -423,9 +423,9 @@ elif page_choice == "National & District Rings":
     col_map = {col.upper(): col for col in rings_df.columns}
 
     expected = [
-        "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
-        "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons",
-        "Combat Weapons", "COMPETITION DAY", "COMPETITION RING", "TIME"
+        "LAST NAME", "FIRST NAME", "ATA #", "TRADITIONAL RING IDENTIFIER",
+        "TRADITIONAL", "TRADITIONAL", "ONE", "TRADITIONAL",
+        "COMBAT", "TRADITIONAL COMPETITION", "RING NUMBER", "SATURDAY"
     ]
     missing_cols = [c for c in expected if c not in col_map]
     if missing_cols:
@@ -448,7 +448,7 @@ elif page_choice == "National & District Rings":
                 )
                 results = rings_df.loc[mask].copy()
     elif search_type == "Division Assigned":
-        div_col = col_map.get("DIVISION ASSIGNED")
+        div_col = col_map.get("TRADITIONAL RING IDENTIFIER")
         if div_col:
             divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
             sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + divisions)
@@ -475,3 +475,4 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
