@@ -393,16 +393,14 @@ elif page_choice == "National & District Rings":
     # --- Load Rings CSV ---
     try:
         rings_raw = requests.get(RINGS_CSV_URL).content
-        rings_df = pd.read_csv(io.StringIO(rings_raw.decode("utf-8")), header=0)
-
-        # Flatten headers: remove carriage returns, line breaks, multiple spaces
-        new_cols = []
-        for c in rings_df.columns:
-            c_clean = c.replace("\n", " ").replace("\r", " ").strip()
-            c_clean = " ".join(c_clean.split())  # remove extra spaces
-            new_cols.append(c_clean)
-        rings_df.columns = new_cols
-
+        rings_df = pd.read_csv(io.StringIO(rings_raw.decode("utf-8")), header=None)  # no header
+        # Rename columns by order
+        rings_df.columns = [
+            "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
+            "Traditional Forms", "Traditional Sparring", "One Steps",
+            "Traditional Weapons", "Combat Weapons",
+            "COMPETITION DAY", "COMPETITION RING", "TIME"
+        ]
         st.success("✅ Rings sheet loaded successfully")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
@@ -418,14 +416,7 @@ elif page_choice == "National & District Rings":
 
     # --- Column map ---
     col_map = {col.upper(): col for col in rings_df.columns}
-    expected = [
-        "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
-        "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons",
-        "Combat Weapons", "COMPETITION DAY", "COMPETITION RING", "TIME"
-    ]
-    missing_cols = [c for c in expected if c not in col_map]
-    if missing_cols:
-        st.warning(f"Warning: missing columns in Rings sheet: {missing_cols}")
+    expected = rings_df.columns.tolist()  # now we trust them by position
 
     # --- SEARCH OPTIONS ---
     search_type = st.radio("Search by:", ["Name", "Division Assigned", "Member License Number"])
@@ -464,9 +455,8 @@ elif page_choice == "National & District Rings":
                     results = rings_df.loc[mask].copy()
 
     # --- Display ---
-    display_cols = [col_map[c] for c in expected if c in col_map]
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
-        st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
+        st.dataframe(results[expected].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
