@@ -384,56 +384,43 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    RINGS_SHEET_URL = "https://atamartialarts.com/events/fall-nationals/fall-nationals-ring-assignments/traditional-assignments/"
+    # Replace this with the published CSV link of the embedded sheet
+    RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/<sheet_id>/pub?output=csv"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
-    # Load members sheet safely
+    # --- Load Rings sheet ---
     try:
-        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # force strings
-    except Exception as e:
-        st.error(f"Failed to load Members sheet: {e}")
-        st.stop()
-
-    # --- Fetch Rings table from webpage ---
-    try:
-        import requests
-        from bs4 import BeautifulSoup
-
-        r = requests.get(RINGS_SHEET_URL, timeout=12)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        table = soup.find("table")
-        if table is None:
-            st.error("Failed to load Rings table: No table found on page.")
-            st.stop()
-
-        rings_df = pd.read_html(str(table))[0]
-
-        # --- Clean headers ---
-        rings_df.columns = [
-            c.replace("\n", " ").replace("\r", " ").replace("\t", " ").strip()
-            for c in rings_df.columns
-        ]
-        rings_df.columns = [' '.join(c.split()) for c in rings_df.columns]
-
+        rings_df = pd.read_csv(RINGS_CSV_URL, dtype=str)
+        # Clean headers: remove carriage returns, extra spaces
+        rings_df.columns = [c.replace("\n", " ").strip() for c in rings_df.columns]
+        st.success("✅ Rings sheet loaded successfully.")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
 
-    # Map columns for searching
+    # --- Load Members sheet ---
+    try:
+        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)
+    except Exception as e:
+        st.error(f"Failed to load Members sheet: {e}")
+        st.stop()
+
+    # --- Map column names ---
     col_map = {col.upper(): col for col in rings_df.columns}
 
+    # --- Expected columns ---
     expected = [
         "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
-        "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons",
-        "Combat Weapons", "COMPETITION DAY", "COMPETITION RING", "TIME"
+        "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons", "Combat Weapons",
+        "COMPETITION DAY", "COMPETITION RING", "TIME"
     ]
-    missing_cols = [c for c in expected if c.upper() not in col_map]
+    missing_cols = [c for c in expected if c not in col_map]
     if missing_cols:
         st.warning(f"Warning: missing columns in Rings sheet: {missing_cols}")
 
     # --- SEARCH OPTIONS ---
     search_type = st.radio("Search by:", ["Name", "Division Assigned", "Member License Number"])
+
     results = pd.DataFrame(columns=rings_df.columns)
 
     if search_type == "Name":
@@ -460,21 +447,16 @@ elif page_choice == "National & District Rings":
         if lic_query:
             members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
             if not members_filtered.empty:
-                members_filtered['FullName'] = (
-                    members_filtered['MemberFirstName'].str.strip() + " " +
-                    members_filtered['MemberLastName'].str.strip()
-                ).str.lower()
+                members_filtered['FullName'] = (members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()).str.lower()
                 ln_col = col_map.get("LAST NAME")
                 fn_col = col_map.get("FIRST NAME")
                 if ln_col and fn_col:
-                    rings_fullname = (
-                        rings_df[fn_col].astype(str).str.strip() + " " + rings_df[ln_col].astype(str).str.strip()
-                    ).str.lower()
+                    rings_fullname = (rings_df[fn_col].astype(str).str.strip() + " " + rings_df[ln_col].astype(str).str.strip()).str.lower()
                     mask = rings_fullname.isin(members_filtered['FullName'])
                     results = rings_df.loc[mask].copy()
 
-    # Columns to display
-    display_cols = [col_map[c.upper()] for c in expected if c.upper() in col_map]
+    # --- Display ---
+    display_cols = [col_map[c] for c in expected if c in col_map]
 
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
