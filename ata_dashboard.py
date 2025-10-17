@@ -387,7 +387,7 @@ elif page_choice == "National & District Rings":
     import io
 
     # Direct CSV export link from Google Sheet
-    RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
+    RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1314980945"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
     # Load Rings sheet
@@ -467,4 +467,5 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
 
