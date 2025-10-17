@@ -433,7 +433,7 @@ elif page_choice == "National & District Rings":
                 results = rings_df.loc[mask].copy()
 
     elif search_type == "Division Assigned":
-        div_col = col_map.get("DIVISION ASSIGNED")
+        div_col = col_map.get("TRADITIONAL RING IDENTIFIER")
         if div_col:
             divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
             sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + divisions)
@@ -467,5 +467,6 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
 
 
