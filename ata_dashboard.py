@@ -382,27 +382,29 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 
 # --- PAGE 3: National & District Rings ---
 elif page_choice == "National & District Rings":
+    import requests
+    import pandas as pd
+    import io
+
     st.title("National & District Tournament Rings")
 
-    import io  # Needed for in-memory fixes
-
-    # Correct CSV export URL for Rings sheet
-    #RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/export?format=csv&gid=410820480"
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/export?format=csv&gid=410820480"
-
+    # URLs
+    RINGS_HTML_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pubhtml?gid=410820480&single=true&widget=true&headers=false"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
-    # Load Rings sheet
+    # --- LOAD RINGS SHEET ---
     try:
-        rings_df = pd.read_csv(RINGS_SHEET_URL, dtype=str)
-        # Fix carriage returns in headers
-        rings_df.columns = [c.replace("\n", " ").strip() for c in rings_df.columns]
+        html = requests.get(RINGS_HTML_URL).text
+        tables = pd.read_html(html)
+        rings_df = tables[0]
+        # Clean up carriage returns in column headers
+        rings_df.columns = [c.replace('\n', ' ').strip() for c in rings_df.columns]
         st.success("✅ Rings sheet loaded successfully.")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
 
-    # Load Members sheet
+    # --- LOAD MEMBERS SHEET ---
     try:
         members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)
         st.success("✅ Members sheet loaded successfully.")
@@ -410,23 +412,22 @@ elif page_choice == "National & District Rings":
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
 
-    # Normalize column lookup
-    col_map = {col.strip().upper(): col for col in rings_df.columns}
+    # --- STANDARDIZE COLUMN LOOKUP ---
+    col_map = {col.upper(): col for col in rings_df.columns}
 
-    expected_cols = [
+    expected_columns = [
         "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
         "Traditional Forms", "Traditional Sparring", "One Steps",
         "Traditional Weapons", "Combat Weapons",
         "COMPETITION DAY", "COMPETITION RING", "TIME"
     ]
 
-    missing_cols = [c for c in expected_cols if c not in col_map]
+    missing_cols = [c for c in expected_columns if c not in col_map]
     if missing_cols:
         st.warning(f"Warning: missing columns in Rings sheet: {missing_cols}")
 
     # --- SEARCH OPTIONS ---
     search_type = st.radio("Search by:", ["Name", "Division Assigned", "Member License Number"])
-
     results = pd.DataFrame(columns=rings_df.columns)
 
     if search_type == "Name":
@@ -455,6 +456,7 @@ elif page_choice == "National & District Rings":
         if lic_query:
             members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
             if not members_filtered.empty:
+                # Build full names for matching
                 members_filtered['FullName'] = (
                     members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()
                 ).str.lower()
@@ -467,12 +469,10 @@ elif page_choice == "National & District Rings":
                     mask = rings_fullname.isin(members_filtered['FullName'])
                     results = rings_df.loc[mask].copy()
 
-    # Columns to display
-    display_cols = [col_map[c] for c in expected_cols if c in col_map]
-
+    # --- DISPLAY RESULTS ---
+    display_cols = [col_map[c] for c in expected_columns if c in col_map]
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
-
