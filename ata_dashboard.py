@@ -384,55 +384,29 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    #RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
-    #RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pubhtml?gid=410820480&single=true&widget=true&headers=true"
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pub?gid=410820480&single=true&output=csv"
+    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pubhtml?gid=410820480&single=true&widget=true&headers=false"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
+    import io
+
     # Load rings sheet safely
-   # try:
-    #    #rings_df = pd.read_csv(RINGS_SHEET_URL)
-     #   rings_df = pd.read_csv(RINGS_SHEET_URL, dtype=str, on_bad_lines='skip', engine='python')
-    #except Exception as e:
-     #   st.error(f"Failed to load Rings sheet: {e}")
-      #  st.stop()
+    try:
+        rings_df = pd.read_csv(RINGS_SHEET_URL)
+        # --- CLEAN HEADER ---
+        rings_df.columns = [col.replace('\n', ' ').strip() for col in rings_df.columns]
+    except Exception as e:
+        st.error(f"Failed to load Rings sheet: {e}")
+        st.stop()
 
-def load_google_csv_with_clean_headers(url):
-    """
-    Cleans Google Sheet exports that contain line breaks in header cells.
-    Replaces embedded newlines with spaces and trims extra whitespace.
-    """
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise ValueError(f"Failed to fetch sheet (HTTP {response.status_code})")
-
-    text = response.text
-    # Remove carriage returns, flatten embedded line breaks inside quoted fields
-    cleaned = text.replace('\r', '')
-    cleaned = cleaned.replace('"\n', '"').replace('\n"', '"')
-    cleaned = cleaned.replace('\n', ' ')  # as a final safety to prevent header splits
-
-    df = pd.read_csv(io.StringIO(cleaned), on_bad_lines='skip')
-    df.columns = [c.replace('\n', ' ').replace('\r', ' ').strip() for c in df.columns]
-    return df
-
-# --- Load Rings Sheet safely with header cleaning ---
-try:
-    rings_df = load_google_csv_with_clean_headers(RINGS_SHEET_URL)
-    st.success("✅ Rings sheet loaded successfully.")
-except Exception as e:
-    st.error(f"Failed to load Rings sheet: {e}")
-    st.stop()
-    
     # Load members sheet safely
     try:
-        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # force strings to preserve numbers like 2247
+        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # force strings
     except Exception as e:
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
 
-    # Normalize column lookup
-    col_map = {col.strip().upper(): col for col in rings_df.columns}
+    # Map cleaned headers
+    col_map = {col.upper(): col for col in rings_df.columns}
 
     expected = [
         "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
@@ -470,10 +444,8 @@ except Exception as e:
     else:  # Member License Number
         lic_query = st.text_input("Enter License Number:").strip()
         if lic_query:
-            # find members with that LicenseNumber
             members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
             if not members_filtered.empty:
-                # build full names for matching
                 members_filtered['FullName'] = (members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()).str.lower()
                 ln_col = col_map.get("LAST NAME")
                 fn_col = col_map.get("FIRST NAME")
@@ -482,7 +454,6 @@ except Exception as e:
                     mask = rings_fullname.isin(members_filtered['FullName'])
                     results = rings_df.loc[mask].copy()
 
-    # Columns to display
     display_cols = [col_map[c] for c in expected if c in col_map]
 
     st.subheader(f"Search Results ({len(results)})")
@@ -490,10 +461,3 @@ except Exception as e:
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
-
-
-
-
-
-
-
