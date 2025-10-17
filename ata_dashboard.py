@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import re
+import io
 
 # Page config
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
@@ -389,13 +390,40 @@ elif page_choice == "National & District Rings":
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
     # Load rings sheet safely
-    try:
-        #rings_df = pd.read_csv(RINGS_SHEET_URL)
-        rings_df = pd.read_csv(RINGS_SHEET_URL, dtype=str, on_bad_lines='skip', engine='python')
-    except Exception as e:
-        st.error(f"Failed to load Rings sheet: {e}")
-        st.stop()
+   # try:
+    #    #rings_df = pd.read_csv(RINGS_SHEET_URL)
+     #   rings_df = pd.read_csv(RINGS_SHEET_URL, dtype=str, on_bad_lines='skip', engine='python')
+    #except Exception as e:
+     #   st.error(f"Failed to load Rings sheet: {e}")
+      #  st.stop()
 
+def load_google_csv_with_clean_headers(url):
+    """
+    Cleans Google Sheet exports that contain line breaks in header cells.
+    Replaces embedded newlines with spaces and trims extra whitespace.
+    """
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise ValueError(f"Failed to fetch sheet (HTTP {response.status_code})")
+
+    text = response.text
+    # Remove carriage returns, flatten embedded line breaks inside quoted fields
+    cleaned = text.replace('\r', '')
+    cleaned = cleaned.replace('"\n', '"').replace('\n"', '"')
+    cleaned = cleaned.replace('\n', ' ')  # as a final safety to prevent header splits
+
+    df = pd.read_csv(io.StringIO(cleaned), on_bad_lines='skip')
+    df.columns = [c.replace('\n', ' ').replace('\r', ' ').strip() for c in df.columns]
+    return df
+
+# --- Load Rings Sheet safely with header cleaning ---
+try:
+    rings_df = load_google_csv_with_clean_headers(RINGS_SHEET_URL)
+    st.success("✅ Rings sheet loaded successfully.")
+except Exception as e:
+    st.error(f"Failed to load Rings sheet: {e}")
+    st.stop()
+    
     # Load members sheet safely
     try:
         members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # force strings to preserve numbers like 2247
@@ -462,6 +490,7 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
 
 
 
