@@ -384,24 +384,31 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    # Direct CSV export links
+    import io
+    import requests
+
     RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pub?output=csv&gid=410820480"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
-    import io
-
-    # Load Rings sheet
+    # --- Load Rings CSV ---
     try:
         rings_raw = requests.get(RINGS_CSV_URL).content
-        rings_df = pd.read_csv(io.StringIO(rings_raw.decode('utf-8')))
-        # Clean headers: remove carriage returns / line breaks and strip spaces
-        rings_df.columns = [c.replace("\n", " ").replace("\r", " ").strip() for c in rings_df.columns]
+        rings_df = pd.read_csv(io.StringIO(rings_raw.decode("utf-8")), header=0)
+
+        # Flatten headers: remove carriage returns, line breaks, multiple spaces
+        new_cols = []
+        for c in rings_df.columns:
+            c_clean = c.replace("\n", " ").replace("\r", " ").strip()
+            c_clean = " ".join(c_clean.split())  # remove extra spaces
+            new_cols.append(c_clean)
+        rings_df.columns = new_cols
+
         st.success("✅ Rings sheet loaded successfully")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
 
-    # Load Members sheet
+    # --- Load Members CSV ---
     try:
         members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)
         st.success("✅ Members sheet loaded successfully")
@@ -409,9 +416,8 @@ elif page_choice == "National & District Rings":
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
 
-    # Normalize column lookup
+    # --- Column map ---
     col_map = {col.upper(): col for col in rings_df.columns}
-
     expected = [
         "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
         "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons",
@@ -457,9 +463,8 @@ elif page_choice == "National & District Rings":
                     mask = rings_fullname.isin(members_filtered['FullName'])
                     results = rings_df.loc[mask].copy()
 
-    # Columns to display
+    # --- Display ---
     display_cols = [col_map[c] for c in expected if c in col_map]
-
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
