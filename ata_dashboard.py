@@ -383,7 +383,8 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+    #RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1grZSp3fr3lZy4ScG8EqbvFCkNJm_jK3KjNhh2BXJm9A/export?format=csv"
+    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pubhtml?gid=410820480&single=true&widget=true&headers=false"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
     # Load rings sheet safely
@@ -404,9 +405,9 @@ elif page_choice == "National & District Rings":
     col_map = {col.strip().upper(): col for col in rings_df.columns}
 
     expected = [
-        "LAST NAME", "FIRST NAME", "ATA NUMBER", "DIVISION ASSIGNED",
-        "TRADITIONAL FORM", "TRADITIONAL SPARRING", "TRADITIONAL WEAPONS",
-        "COMBAT WEAPONS", "COMPETITION DAY", "RING NUMBER", "TIME"
+        "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
+        "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons",
+        "Combat Weapons", "COMPETITION DAY", "COMPETITION RING", "TIME"
     ]
     missing_cols = [c for c in expected if c not in col_map]
     if missing_cols:
@@ -459,3 +460,4 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
