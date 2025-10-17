@@ -384,35 +384,41 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    # Correct CSV export URL
+    import io  # Needed for in-memory fixes
+
+    # Correct CSV export URL for Rings sheet
     RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/export?format=csv&gid=410820480"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
-    # Load rings sheet safely
+    # Load Rings sheet
     try:
-        rings_df = pd.read_csv(RINGS_SHEET_URL)
+        rings_df = pd.read_csv(RINGS_SHEET_URL, dtype=str)
         # Fix carriage returns in headers
-        rings_df.columns = [c.replace('\r',' ').strip() for c in rings_df.columns]
+        rings_df.columns = [c.replace("\n", " ").strip() for c in rings_df.columns]
         st.success("✅ Rings sheet loaded successfully.")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
 
-    # Load members sheet safely
+    # Load Members sheet
     try:
-        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # preserve numbers as strings
+        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)
         st.success("✅ Members sheet loaded successfully.")
     except Exception as e:
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
 
-    # Expected columns
+    # Normalize column lookup
+    col_map = {col.strip().upper(): col for col in rings_df.columns}
+
     expected_cols = [
         "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
-        "Traditional Forms", "Traditional Sparring", "One Steps", "Traditional Weapons",
-        "Combat Weapons", "COMPETITION DAY", "COMPETITION RING", "TIME"
+        "Traditional Forms", "Traditional Sparring", "One Steps",
+        "Traditional Weapons", "Combat Weapons",
+        "COMPETITION DAY", "COMPETITION RING", "TIME"
     ]
-    missing_cols = [c for c in expected_cols if c not in rings_df.columns]
+
+    missing_cols = [c for c in expected_cols if c not in col_map]
     if missing_cols:
         st.warning(f"Warning: missing columns in Rings sheet: {missing_cols}")
 
@@ -424,36 +430,43 @@ elif page_choice == "National & District Rings":
     if search_type == "Name":
         name_query = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
         if name_query:
-            ln_col = "LAST NAME"
-            fn_col = "FIRST NAME"
-            mask = (
-                rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
-                | rings_df[fn_col].astype(str).str.lower().str.contains(name_query, na=False)
-                | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
-            )
-            results = rings_df.loc[mask].copy()
+            ln_col = col_map.get("LAST NAME")
+            fn_col = col_map.get("FIRST NAME")
+            if ln_col and fn_col:
+                mask = (
+                    rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
+                    | rings_df[fn_col].astype(str).str.lower().str.contains(name_query, na=False)
+                    | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
+                )
+                results = rings_df.loc[mask].copy()
 
     elif search_type == "Division Assigned":
-        div_col = "DIVISION ASSIGNED"
-        divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
-        sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + divisions)
-        if sel_div:
-            results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
+        div_col = col_map.get("DIVISION ASSIGNED")
+        if div_col:
+            divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
+            sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + divisions)
+            if sel_div:
+                results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
 
     else:  # Member License Number
         lic_query = st.text_input("Enter License Number:").strip()
         if lic_query:
-            # find members with that LicenseNumber
             members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
             if not members_filtered.empty:
-                # build full names for matching
-                members_filtered['FullName'] = (members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()).str.lower()
-                rings_fullname = (rings_df['FIRST NAME'].astype(str).str.strip() + " " + rings_df['LAST NAME'].astype(str).str.strip()).str.lower()
-                mask = rings_fullname.isin(members_filtered['FullName'])
-                results = rings_df.loc[mask].copy()
+                members_filtered['FullName'] = (
+                    members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()
+                ).str.lower()
+                ln_col = col_map.get("LAST NAME")
+                fn_col = col_map.get("FIRST NAME")
+                if ln_col and fn_col:
+                    rings_fullname = (
+                        rings_df[fn_col].astype(str).str.strip() + " " + rings_df[ln_col].astype(str).str.strip()
+                    ).str.lower()
+                    mask = rings_fullname.isin(members_filtered['FullName'])
+                    results = rings_df.loc[mask].copy()
 
     # Columns to display
-    display_cols = [c for c in expected_cols if c in rings_df.columns]
+    display_cols = [col_map[c] for c in expected_cols if c in col_map]
 
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
