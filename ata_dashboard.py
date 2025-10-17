@@ -384,32 +384,28 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    # Direct CSV export link from embedded Google Sheet
+    import io
+
+    # Direct CSV export link from Google Sheet
     RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pub?output=csv&gid=410820480"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
-
-    import io
 
     # Load Rings sheet
     try:
         rings_df = pd.read_csv(RINGS_CSV_URL)
-        # Fix headers: remove carriage returns / line breaks and strip spaces
-        rings_df.columns = [c.replace("\n", " ").replace("\r", " ").strip() for c in rings_df.columns]
-        
-        # Force fix for columns with carriage returns (just in case)
-        # This ensures columns appear in the correct order
-        correct_order = [
-            "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
-            "Traditional Forms", "Traditional Sparring", "One Steps",
-            "Traditional Weapons", "Combat Weapons", "COMPETITION DAY",
-            "COMPETITION RING", "TIME"
-        ]
-        rings_df = rings_df[[c for c in correct_order if c in rings_df.columns]]
-        
         st.success("✅ Rings sheet loaded successfully")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
+
+    # Keep original headers for display
+    original_columns = list(rings_df.columns)
+
+    # Create processing headers using only the top word (first line of multi-line cells)
+    processing_columns = [c.split("\n")[0].strip() for c in rings_df.columns]
+
+    # Map processing column names to original columns
+    col_map = dict(zip(processing_columns, original_columns))
 
     # Load Members sheet
     try:
@@ -418,18 +414,6 @@ elif page_choice == "National & District Rings":
     except Exception as e:
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
-
-    # Normalize column lookup
-    col_map = {col.upper(): col for col in rings_df.columns}
-
-    expected = [
-        "LAST NAME", "FIRST NAME", "ATA #", "TRADITIONAL RING IDENTIFIER",
-        "TRADITIONAL", "TRADITIONAL", "ONE", "TRADITIONAL",
-        "COMBAT", "TRADITIONAL COMPETITION", "RING NUMBER", "SATURDAY"
-    ]
-    missing_cols = [c for c in expected if c not in col_map]
-    if missing_cols:
-        st.warning(f"Warning: missing columns in Rings sheet: {missing_cols}")
 
     # --- SEARCH OPTIONS ---
     search_type = st.radio("Search by:", ["Name", "Division Assigned", "Member License Number"])
@@ -447,32 +431,39 @@ elif page_choice == "National & District Rings":
                     | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
                 )
                 results = rings_df.loc[mask].copy()
+
     elif search_type == "Division Assigned":
-        div_col = col_map.get("TRADITIONAL RING IDENTIFIER")
+        div_col = col_map.get("DIVISION ASSIGNED")
         if div_col:
             divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
             sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + divisions)
             if sel_div:
                 results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
+
     else:  # Member License Number
         lic_query = st.text_input("Enter License Number:").strip()
         if lic_query:
             members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
             if not members_filtered.empty:
-                members_filtered['FullName'] = (members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()).str.lower()
+                members_filtered['FullName'] = (
+                    members_filtered['MemberFirstName'].str.strip() + " " +
+                    members_filtered['MemberLastName'].str.strip()
+                ).str.lower()
                 ln_col = col_map.get("LAST NAME")
                 fn_col = col_map.get("FIRST NAME")
                 if ln_col and fn_col:
-                    rings_fullname = (rings_df[fn_col].astype(str).str.strip() + " " + rings_df[ln_col].astype(str).str.strip()).str.lower()
+                    rings_fullname = (
+                        rings_df[fn_col].astype(str).str.strip() + " " +
+                        rings_df[ln_col].astype(str).str.strip()
+                    ).str.lower()
                     mask = rings_fullname.isin(members_filtered['FullName'])
                     results = rings_df.loc[mask].copy()
 
-    # Columns to display (hide "One Steps")
-    display_cols = [col_map[c] for c in expected if c in col_map and c != "One Steps"]
+    # Columns to display (hide ONE STEPS)
+    display_cols = [c for c in original_columns if "ONE STEPS" not in c]
 
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
-
