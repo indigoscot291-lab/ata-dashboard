@@ -389,7 +389,8 @@ elif page_choice == "National & District Rings":
 
     # Load rings sheet safely
     try:
-        rings_df = pd.read_csv(RINGS_SHEET_URL)
+        #rings_df = pd.read_csv(RINGS_SHEET_URL)
+        rings_df = pd.read_csv(csv_url, dtype=str, on_bad_lines='skip', engine='python')
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
@@ -460,4 +461,5 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
 
