@@ -384,31 +384,31 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
 
-    import io  # needed for proper CSV handling
+    import io
 
-    # Correct CSV export URL
-    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/export?format=csv&gid=410820480"
+    # Use the proper CSV export URL
+    RINGS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRWVqaFh-t631NUnG02NKhFgIqsoa5xApfWCDp-dwLhJidzk_PSTa8UVrBYCmDlOQ/pub?gid=410820480&single=true&output=csv"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
     # Load rings sheet safely
     try:
         rings_df = pd.read_csv(RINGS_SHEET_URL)
         # Fix headers with carriage returns
-        rings_df.columns = [col.replace('\n', ' ').strip() for col in rings_df.columns]
-        st.success("✅ Rings sheet loaded successfully")
+        rings_df.columns = [col.replace("\r", " ").strip() for col in rings_df.columns]
+        st.success("✅ Rings sheet loaded successfully.")
     except Exception as e:
         st.error(f"Failed to load Rings sheet: {e}")
         st.stop()
 
     # Load members sheet safely
     try:
-        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # preserve numbers like 2247
+        members_df = pd.read_csv(MEMBERS_SHEET_URL, dtype=str)  # force strings
     except Exception as e:
         st.error(f"Failed to load Members sheet: {e}")
         st.stop()
 
     # Normalize column lookup
-    col_map = {col.strip().upper(): col for col in rings_df.columns}
+    col_map = {col.upper(): col for col in rings_df.columns}
 
     expected = [
         "LAST NAME", "FIRST NAME", "ATA #", "DIVISION ASSIGNED",
@@ -446,10 +446,8 @@ elif page_choice == "National & District Rings":
     else:  # Member License Number
         lic_query = st.text_input("Enter License Number:").strip()
         if lic_query:
-            # find members with that LicenseNumber
             members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
             if not members_filtered.empty:
-                # build full names for matching
                 members_filtered['FullName'] = (members_filtered['MemberFirstName'].str.strip() + " " + members_filtered['MemberLastName'].str.strip()).str.lower()
                 ln_col = col_map.get("LAST NAME")
                 fn_col = col_map.get("FIRST NAME")
