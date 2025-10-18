@@ -493,8 +493,6 @@ elif page_choice == "National & District Rings":
         try:
             rings_df = pd.read_csv(XRINGS_CSV_URL)
             st.success("✅ C/X Rings sheet loaded successfully")
-            st.write("Creative & Xtreme columns:", rings_df.columns.tolist())
-            st.write(rings_df.head())
         except Exception as e:
             st.error(f"Failed to load C/X Rings sheet: {e}")
             st.stop()
@@ -572,6 +570,7 @@ elif page_choice == "National & District Rings":
     elif section_choice == "Judging Assignment":
         st.subheader("Judging Assignments")
         st.info("Placeholder – data and layout coming soon!")
+
 
 
 
