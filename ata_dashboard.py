@@ -383,9 +383,16 @@ elif page_choice == "1st Degree Black Belt Women 50-59":
 # --- PAGE 3: National & District Rings ---
 elif page_choice == "National & District Rings":
     st.title("National & District Tournament Rings")
-
+    
+  # Add a dropdown selector
+    section_choice = st.selectbox(
+        "Select Category:",
+        ["Traditional", "Creative & Xtreme", "Judging Assignment"],
+        index=0
+    )
     import io
 
+     if section_choice == "Traditional":
     # Direct CSV export link from Google Sheet
     RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1314980945"
     MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
@@ -467,5 +474,13 @@ elif page_choice == "National & District Rings":
         st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
     else:
         st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+        
+  elif section_choice == "Creative & Xtreme":
+        st.subheader("Creative & Xtreme Rings")
+        st.info("Placeholder – data and layout coming soon!")
+
+    elif section_choice == "Judging Assignment":
+        st.subheader("Judging Assignments")
+        st.info("Placeholder – data and layout coming soon!")
 
 
