@@ -566,7 +566,6 @@ elif page_choice == "National & District Rings":
                         mask = rings_fullname.isin(members_filtered['FullName'])
                         results = rings_df.loc[mask].copy()
 
-        # Columns to display (hide ONE STEPS)
         display_cols = [c for c in original_columns if "ONE STEPS" not in c]
 
         st.subheader(f"Search Results ({len(results)})")
@@ -644,12 +643,11 @@ elif page_choice == "National & District Rings":
                     if ln_col and fn_col:
                         rings_fullname = (
                             rings_df[fn_col].astype(str).str.strip() + " " +
-                            rings_df[ln_col].astype(str).str.strip()
+                            rings_df[ln_col].astype(str).strip()
                         ).str.lower()
                         mask = rings_fullname.isin(members_filtered['FullName'])
                         results = rings_df.loc[mask].copy()
 
-        # Display results
         st.subheader(f"Search Results ({len(results)})")
         if not results.empty:
             st.dataframe(results.reset_index(drop=True),
