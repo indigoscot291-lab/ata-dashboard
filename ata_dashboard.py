@@ -485,6 +485,7 @@ elif page_choice == "National & District Rings":
         st.subheader("Creative & Xtreme Rings")
         st.info("Placeholder – data and layout coming soon!")
 
-    elif section_choice == "Judging Assignment":
+    elif section_choice == "Judging Assignments":
         st.subheader("Judging Assignments")
         st.info("Placeholder – data and layout coming soon!")
+
