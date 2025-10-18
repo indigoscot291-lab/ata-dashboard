@@ -594,101 +594,26 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
-# --- PAGE: Competitor Search ---
-elif page_choice == "Competitor Search":
-    st.title("Competitor Search")
+st.title("Competitor Search")
 
-    # Load Age Group matrix
-    AGE_MATRIX_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
-    try:
-        age_df = pd.read_csv(AGE_MATRIX_URL)
-        st.success("✅ Age Group matrix loaded")
-    except Exception as e:
-        st.error(f"Failed to load Age Group matrix: {e}")
-        st.stop()
+# Load Age Group matrix
+AGE_MATRIX_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
+try:
+    age_df = pd.read_csv(AGE_MATRIX_URL)
+except Exception as e:
+    st.error(f"Failed to load Age Group matrix: {e}")
+    st.stop()
 
-    # --- SEARCH INPUTS ---
-    name_query = st.text_input("Enter competitor name (partial match required):").strip()
-    if not name_query:
-        st.warning("Please enter a name to search.")
-        st.stop()
+# --- SEARCH INPUTS ---
+name_query = st.text_input("Enter competitor name (partial match required):").strip()
+if not name_query:
+    st.warning("Please enter a name to search.")
+    st.stop()
 
-    age_options = ["All"] + list(age_df["Age Group"])
-    selected_ages = st.multiselect("Select Age Group(s) (optional):", age_options, default=["All"])
+# Age Group dropdown (multi-select)
+age_options = ["All"] + list(age_df["Age Group"])
+selected_ages = st.multiselect("Select Age Group(s) (optional):", age_options, default=["All"])
 
-    state_options = ["All"] + list(REGION_CODES.keys()) + ["International"]
-    selected_state = st.selectbox("Select State (optional):", state_options, index=0)
-
-    # Normalize function for robust matching
-    import re
-    def normalize_name(s):
-        return re.sub(r"[^a-z]", "", s.lower())
-
-    # Determine codes to search
-    if "All" in selected_ages:
-        codes_to_search = list(age_df["Code"])
-    else:
-        codes_to_search = age_df.loc[age_df["Age Group"].isin(selected_ages), "Code"].tolist()
-
-    # Determine states to search
-    if selected_state == "All":
-        states_to_search = list(REGION_CODES.keys()) + ["International"]
-    else:
-        states_to_search = [selected_state]
-
-    # --- PARALLEL FETCH ---
-    from concurrent.futures import ThreadPoolExecutor
-
-    def fetch_single(group_code, state):
-        if state == "International":
-            url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country=US&state=&code={group_code}"
-        else:
-            _, state_code = REGION_CODES[state]
-            url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country=US&state={state_code}&code={group_code}"
-        html = fetch_html(url)
-        return parse_standings(html) if html else {}
-
-    all_entries = []
-
-    with ThreadPoolExecutor() as executor:
-        futures = []
-        for code in codes_to_search:
-            for state in states_to_search:
-                futures.append(executor.submit(fetch_single, code, state))
-        for f in futures:
-            data = f.result()
-            for ev_entries in data.values():
-                for e in ev_entries:
-                    # Add Age Group to each entry
-                    matching_age = age_df.loc[age_df["Code"] == e.get("Code", ""), "Age Group"]
-                    e["Age Group"] = matching_age.iloc[0] if not matching_age.empty else ""
-                    all_entries.append(e)
-
-    # --- FILTER BY NAME ---
-    filtered_entries = [
-        e for e in all_entries if normalize_name(name_query) in normalize_name(e["Name"])
-    ]
-
-    # Optional filtering by selected Age Group(s)
-    if "All" not in selected_ages:
-        filtered_entries = [e for e in filtered_entries if e.get("Age Group") in selected_ages]
-
-    # Optional filtering by selected State
-    if selected_state != "All":
-        if selected_state == "International":
-            filtered_entries = [
-                e for e in filtered_entries if not re.search(r",\s*[A-Z]{2}$", e["Location"])
-            ]
-        else:
-            _, abbrev = REGION_CODES[selected_state]
-            filtered_entries = [
-                e for e in filtered_entries if e["Location"].endswith(f", {abbrev}")
-            ]
-
-    # --- DISPLAY RESULTS ---
-    st.subheader(f"Search Results ({len(filtered_entries)})")
-    if filtered_entries:
-        display_df = pd.DataFrame(filtered_entries)[["Name", "Location", "Age Group"]]
-        st.dataframe(display_df.reset_index(drop=True), use_container_width=True)
-    else:
-        st.info("No competitors found matching the search criteria.")
+# State dropdown
+state_options = ["All"] + list(REGION_CODES.keys()) + ["International"]
+selected_state = st.selectbox("Select State (optional):", state_options, index=0)
