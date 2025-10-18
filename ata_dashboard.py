@@ -569,6 +569,7 @@ elif page_choice == "National & District Rings":
 # --- JUDGING ASSIGNMENTS ---
 elif section_choice == "Judging Assignment":
     st.subheader("Judging Assignments")
+
     # Direct CSV export link from Google Sheet
     JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
 
@@ -582,7 +583,11 @@ elif section_choice == "Judging Assignment":
 
     # Keep original headers for display
     original_columns = list(rings_df.columns)
+
+    # Create processing headers using only the top word (first line of multi-line cells)
     processing_columns = [c.split("\n")[0].strip() for c in rings_df.columns]
+
+    # Map processing column names to original columns
     col_map = dict(zip(processing_columns, original_columns))
 
     # --- SEARCH OPTIONS ---
@@ -612,11 +617,9 @@ elif section_choice == "Judging Assignment":
 
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
-        st.dataframe(
-            results.reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-            height=600
-        )
+        st.dataframe(results.reset_index(drop=True),
+                     use_container_width=True,
+                     hide_index=True,
+                     height=600)
     else:
         st.info("No results found. Enter a search term or select an ATA Number.")
