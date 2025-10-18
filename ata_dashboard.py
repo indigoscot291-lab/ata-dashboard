@@ -594,26 +594,90 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
-st.title("Competitor Search")
+# --- PAGE: Competitor Search ---
+elif page_choice == "Competitor Search":
+    st.title("Competitor Search")
 
-# Load Age Group matrix
-AGE_MATRIX_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
-try:
-    age_df = pd.read_csv(AGE_MATRIX_URL)
-except Exception as e:
-    st.error(f"Failed to load Age Group matrix: {e}")
-    st.stop()
+    # Mobile check
+    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
 
-# --- SEARCH INPUTS ---
-name_query = st.text_input("Enter competitor name (partial match required):").strip()
-if not name_query:
-    st.warning("Please enter a name to search.")
-    st.stop()
+    # --- INPUTS ---
+    name_query = st.text_input("Enter competitor name (mandatory):").strip().lower()
 
-# Age Group dropdown (multi-select)
-age_options = ["All"] + list(age_df["Age Group"])
-selected_ages = st.multiselect("Select Age Group(s) (optional):", age_options, default=["All"])
+    # Load Age Group matrix
+    MATRIX_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
+    age_matrix = pd.read_csv(MATRIX_URL, dtype=str)
+    age_groups = ["All"] + age_matrix["Age Group"].tolist()
+    selected_age_groups = st.multiselect("Select Age Group/Rank (optional):", age_groups, default=["All"])
 
-# State dropdown
-state_options = ["All"] + list(REGION_CODES.keys()) + ["International"]
-selected_state = st.selectbox("Select State (optional):", state_options, index=0)
+    # State selector
+    state_options = ["All"] + list(REGION_CODES.keys()) + ["International"]
+    selected_state = st.selectbox("Select State (optional):", state_options, index=0)
+
+    # --- SEARCH BUTTON ---
+    if st.button("Search"):
+        if not name_query:
+            st.warning("Please enter a name to search.")
+        else:
+            # Determine codes to search
+            if "All" in selected_age_groups:
+                codes_to_search = age_matrix["Code"].tolist()
+            else:
+                codes_to_search = age_matrix.loc[age_matrix["Age Group"].isin(selected_age_groups), "Code"].tolist()
+
+            # Determine regions to fetch
+            if selected_state == "All":
+                regions_to_search = list(REGION_CODES.keys())
+            elif selected_state == "International":
+                regions_to_search = []
+            else:
+                regions_to_search = [selected_state]
+
+            st.info(f"Searching for '{name_query}' in Age Group(s): {', '.join(selected_age_groups)}; State: {selected_state} ...")
+
+            # --- PARALLEL FETCH FUNCTION ---
+            import concurrent.futures
+
+            def fetch_name_matches(code, region):
+                if region in REGION_CODES:
+                    country, state_code = REGION_CODES[region]
+                    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={code}"
+                else:  # International
+                    url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={code}"
+                html = fetch_html(url)
+                if html:
+                    data = parse_standings(html)
+                    matched = []
+                    for ev_entries in data.values():
+                        for e in ev_entries:
+                            if name_query in e["Name"].lower():
+                                e_copy = e.copy()
+                                e_copy["Age Group"] = age_matrix.loc[age_matrix["Code"]==code, "Age Group"].values[0]
+                                matched.append(e_copy)
+                    return matched
+                return []
+
+            # --- PARALLEL EXECUTION ---
+            results_list = []
+            with st.spinner("Fetching data..."):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = []
+                    for code in codes_to_search:
+                        if not regions_to_search:  # International
+                            futures.append(executor.submit(fetch_name_matches, code, ""))
+                        else:
+                            for region in regions_to_search:
+                                futures.append(executor.submit(fetch_name_matches, code, region))
+                    for fut in concurrent.futures.as_completed(futures):
+                        results_list.extend(fut.result())
+
+            # --- DISPLAY RESULTS ---
+            if results_list:
+                result_df = pd.DataFrame(results_list)[["Name", "Location", "Age Group"]]
+                st.subheader(f"Results ({len(result_df)})")
+                if is_mobile:
+                    st.dataframe(result_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(result_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+            else:
+                st.info("No results found.")
