@@ -195,7 +195,7 @@ page_choice = st.selectbox(
     [
         "ATA Standings Dashboard",
         "1st Degree Black Belt Women 50-59",
-        "National & District Rings"
+        "National & District Rings",
         "Competitor Search"
     ]
 )
@@ -658,5 +658,6 @@ elif page_choice == "Competitor Search":
                 st.dataframe(results_df.reset_index(drop=True))
             else:
                 st.warning("❌ Competitor not found")
+
 
 
