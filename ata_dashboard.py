@@ -462,11 +462,18 @@ elif page_choice == "National & District Rings":
     # Columns to display (hide ONE STEPS)
     display_cols = [c for c in original_columns if "ONE STEPS" not in c]
 
-    st.subheader(f"Search Results ({len(results)})")
-    if not results.empty:
-        st.dataframe(results[display_cols].reset_index(drop=True), use_container_width=True, hide_index=True)
-    else:
-        st.info("No results found. Enter a search term, select a division, or enter a License Number.")
-
+st.subheader(f"Search Results ({len(results)})")
+if not results.empty:
+    # Approximate row height ~35 pixels
+    row_count = min(16, len(results))  # show up to 16 rows, less if fewer results
+    st.dataframe(
+        results[display_cols].reset_index(drop=True),
+        use_container_width=True,
+        hide_index=True,
+        height=35 * row_count
+    )
+else:
+    st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+ 
 
 
