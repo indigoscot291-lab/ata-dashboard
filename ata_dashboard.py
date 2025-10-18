@@ -566,67 +566,63 @@ elif page_choice == "National & District Rings":
         else:
             st.info("No results found. Enter a search term, select a division, or enter a License Number.")
 
-    # --- JUDGING ASSIGNMENTS ---
-    elif section_choice == "Judging Assignment":
-        st.subheader("Judging Assignments")
-         # Direct CSV export link from Google Sheet
-        JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-       
-        # Load Rings sheet
-        try:
-            rings_df = pd.read_csv(JUDGE_CSV_URL)
-            st.success("✅ Judges sheet loaded successfully")
-        except Exception as e:
-            st.error(f"Failed to load Judges sheet: {e}")
-            st.stop()
+  # --- JUDGING ASSIGNMENTS ---
+elif section_choice == "Judging Assignment":
+    st.subheader("Judging Assignments")
+    
+    # Direct CSV export link from Google Sheet
+    JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
+   
+    # Load Rings sheet
+    try:
+        rings_df = pd.read_csv(JUDGE_CSV_URL)
+        st.success("✅ Judges sheet loaded successfully")
+    except Exception as e:
+        st.error(f"Failed to load Judges sheet: {e}")
+        st.stop()
 
-        # Keep original headers for display
-        original_columns = list(rings_df.columns)
+    # Keep original headers for display
+    original_columns = list(rings_df.columns)
 
-        # Create processing headers using only the top word (first line of multi-line cells)
-        processing_columns = [c.split("\n")[0].strip() for c in rings_df.columns]
+    # Create processing headers using only the top word (first line of multi-line cells)
+    processing_columns = [c.split("\n")[0].strip() for c in rings_df.columns]
 
-        # Map processing column names to original columns
-        col_map = dict(zip(processing_columns, original_columns))
+    # Map processing column names to original columns
+    col_map = dict(zip(processing_columns, original_columns))
 
- # --- SEARCH OPTIONS ---
-        search_type = st.radio("Search by:", ["Name", "ATA Number"])
-        results = pd.DataFrame(columns=rings_df.columns)
+    # --- SEARCH OPTIONS ---
+    search_type = st.radio("Search by:", ["Name", "ATA Number"])
+    results = pd.DataFrame(columns=rings_df.columns)
 
-        if search_type == "Name":
-            name_query = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
-            if name_query:
-                ln_col = col_map.get("LAST NAME")
-                fn_col = col_map.get("FIRST NAME")
-                if ln_col and fn_col:
-                    mask = (
-                        rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
-                        | rings_df[fn_col].astype(str).str.lower().str.contains(name_query, na=False)
-                        | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
-                    )
-                    results = rings_df.loc[mask].copy()
+    if search_type == "Name":
+        name_query = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
+        if name_query:
+            ln_col = col_map.get("LAST NAME")
+            fn_col = col_map.get("FIRST NAME")
+            if ln_col and fn_col:
+                mask = (
+                    rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
+                    | rings_df[fn_col].astype(str).str.lower().str.contains(name_query, na=False)
+                    | (rings_df[ln_col].astype(str).str.lower() + " " + rings_df[fn_col].astype(str).str.lower()).str.contains(name_query, na=False)
+                )
+                results = rings_df.loc[mask].copy()
 
-        else: search_type == "ATA Number":
-            div_col = col_map.get("ATA#")
-            if div_col:
-                atanums = sorted(rings_df[div_col].dropna().astype(str).unique())
-                sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + atanums)
-                if sel_div:
-                    results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
+    elif search_type == "ATA Number":
+        div_col = col_map.get("ATA#")
+        if div_col:
+            atanums = sorted(rings_df[div_col].dropna().astype(str).unique())
+            sel_div = st.selectbox("Select ATA Number (or leave blank):", [""] + atanums)
+            if sel_div:
+                results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
 
-        st.subheader(f"Search Results ({len(results)})")
-        if not results.empty:
-            st.dataframe(results.reset_index(drop=True),
-                         use_container_width=True,
-                         hide_index=True,
-                         height=600)
-        else:
-            st.info("No results found. Enter a search term, select a division, or enter a License Number.")
-
-
-
-
-
-
-
-
+    # --- DISPLAY RESULTS ---
+    st.subheader(f"Search Results ({len(results)})")
+    if not results.empty:
+        st.dataframe(
+            results.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+            height=600
+        )
+    else:
+        st.info("No results found. Enter a search term or select an ATA Number.")
