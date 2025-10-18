@@ -197,7 +197,7 @@ page_choice = st.selectbox(
         "ATA Standings Dashboard",
         "1st Degree Black Belt Women 50-59",
         "National & District Rings",
-        "Competitor Search"
+#        "Competitor Search"
     ]
 )
 
@@ -594,96 +594,3 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
-# --- PAGE 4: Competitor Search ---
-elif page_choice == "Competitor Search":
-    st.title("Competitor Search")
-
-    # Load Age Group / Code matrix
-    MATRIX_SHEET_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
-    try:
-        matrix_df = pd.read_csv(MATRIX_SHEET_URL)
-        st.success("✅ Age Group matrix loaded")
-    except Exception as e:
-        st.error(f"Failed to load Age Group matrix: {e}")
-        st.stop()
-
-    # --- SEARCH INPUTS ---
-    name_query = st.text_input("Enter Competitor Name (required):").strip()
-    age_groups_choice = st.multiselect(
-        "Optional: Select Age Group(s) / Rank(s):",
-        sorted(matrix_df['Age Group'].dropna().unique())
-    )
-    state_choice = st.selectbox(
-        "Optional: Select State:",
-        ["All"] + sorted(REGION_CODES.keys()) + ["International"]
-    )
-    search_btn = st.button("Search")
-
-    if search_btn:
-        if not name_query:
-            st.warning("Please enter a competitor name to search.")
-        else:
-            # Determine codes for selected age groups
-            if age_groups_choice:
-                selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)]
-            else:
-                selected_matrix = matrix_df
-            codes_age_map = dict(zip(selected_matrix['Code'], selected_matrix['Age Group']))
-
-            combined_rows = []
-
-            def fetch_age_group_data(age_code):
-                rows = []
-                urls = []
-
-                if state_choice == "All":
-                    # Fetch every state + world standings
-                    for state_name, (country, state_abbr) in REGION_CODES.items():
-                        urls.append(
-                            f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr.lower()}&code={age_code}"
-                        )
-                    urls.append(f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}")
-                elif state_choice == "International":
-                    urls.append(f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}")
-                else:
-                    country, state_abbr = REGION_CODES[state_choice]
-                    urls.append(
-                        f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr.lower()}&code={age_code}"
-                    )
-
-                for url in urls:
-                    html = fetch_html(url)
-                    if not html:
-                        continue
-                    parsed_data = parse_standings(html)
-                    for ev_entries in parsed_data.values():
-                        for e in ev_entries:
-                            rows.append({
-                                "Name": e["Name"].strip(),
-                                "Location": e["Location"].strip(),
-                                "Age Group": codes_age_map[age_code]
-                            })
-                return rows
-
-            # --- Parallel fetch ---
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = [executor.submit(fetch_age_group_data, code) for code in codes_age_map]
-                for future in concurrent.futures.as_completed(futures):
-                    combined_rows.extend(future.result())
-
-            # Filter by name (partial, case-insensitive)
-            filtered = [
-                e for e in combined_rows
-                if name_query.lower() in e["Name"].lower()
-            ]
-
-            if filtered:
-                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name", "Location", "Age Group"]).reset_index(drop=True)
-                st.subheader(f"Search Results ({len(results_df)} found)")
-                st.dataframe(
-                    results_df[["Name", "Location", "Age Group"]],
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info("Competitor not found in selected Age Group(s) and State.")
