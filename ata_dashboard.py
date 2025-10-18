@@ -597,67 +597,56 @@ elif page_choice == "National & District Rings":
 elif page_choice == "Competitor Search":
     st.title("Competitor Search")
 
-    # Load Age Group Matrix from Google Sheet
-    MATRIX_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
+    # Load Age Group matrix
+    MATRIX_SHEET_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
     try:
-        matrix_df = pd.read_csv(MATRIX_URL)
-        st.success("✅ Age Group Matrix loaded successfully")
+        matrix_df = pd.read_csv(MATRIX_SHEET_URL, dtype=str)
+        st.success("✅ Age Group matrix loaded successfully")
     except Exception as e:
-        st.error(f"Failed to load Age Group Matrix: {e}")
+        st.error(f"Failed to load Age Group matrix: {e}")
         st.stop()
 
-    # Create Age Group dropdown
-    age_group_choice = st.selectbox(
-        "Select Age Group/Rank (optional):",
-        [""] + matrix_df['Age Group'].tolist()
-    )
-
-    # Map Age Group to Code
-    code_map = dict(zip(matrix_df['Age Group'], matrix_df['Code']))
-    selected_code = code_map.get(age_group_choice, None)
-
-    # Name search (mandatory)
+    # --- SEARCH PARAMETERS ---
     name_query = st.text_input("Enter Competitor Name (required):").strip()
-    if not name_query:
-        st.info("Please enter a competitor name to search.")
-        st.stop()
+    age_group_choice = st.selectbox("Select Age Group / Rank (optional):", [""] + matrix_df['Age Group'].tolist())
+    state_choice = st.selectbox("Select State / Region (optional):", REGIONS)
 
-    # Optional state search
-    state_query = st.text_input("Enter state (optional):").strip()
+    search_button = st.button("Search Competitor")
 
-    # Button to start search
-    go = st.button("Search Competitor")
+    if search_button:
+        if not name_query:
+            st.warning("Please enter a competitor name.")
+        else:
+            # Map Age Group → Code
+            code = ""
+            if age_group_choice:
+                code_row = matrix_df.loc[matrix_df['Age Group'] == age_group_choice, 'Code']
+                if not code_row.empty:
+                    code = code_row.iloc[0]
 
-    if go:
-        with st.spinner("Searching ATA standings..."):
-            # If Age Group selected, use the code; else search all groups
-            search_groups = [age_group_choice] if selected_code else list(GROUPS.keys())
-            found_results = []
+            # Determine region for gather_data
+            region_choice = state_choice if state_choice and state_choice != "All" else "All"
 
-            for group_key in search_groups:
-                combined, _ = gather_data(
-                    group_key=group_key,
-                    region_choice=state_query if state_query else "All",
-                    district_choice=""
-                )
+            with st.spinner("Searching competitor..."):
+                try:
+                    combined, has_results = gather_data(code, region_choice, district_choice="")
+                except KeyError:
+                    st.error(f"No data found for the selected Age Group / Code: {code}")
+                    combined = {}
+                    has_results = False
 
-                # Flatten combined events and search by name
+                # Flatten combined dict into a single list of dicts
+                all_entries = []
                 for ev, entries in combined.items():
-                    for e in entries:
-                        if name_query.lower() in e["Name"].lower():
-                            # Filter by state if provided
-                            if state_query:
-                                _, state_abbr = REGION_CODES.get(state_query, ("", ""))
-                                if not e["Location"].endswith(f", {state_abbr}"):
-                                    continue
-                            found_results.append({"Name": e["Name"], "Location": e["Location"]})
+                    all_entries.extend(entries)
 
-            if found_results:
-                results_df = pd.DataFrame(found_results).drop_duplicates()
-                st.success(f"✅ Found {len(results_df)} result(s)")
-                st.dataframe(results_df.reset_index(drop=True))
-            else:
-                st.warning("❌ Competitor not found")
+                # Filter by name (case-insensitive)
+                filtered = [e for e in all_entries if name_query.lower() in e["Name"].lower()]
 
-
-
+                if filtered:
+                    # Only show Name and Location
+                    result_df = pd.DataFrame(filtered)[["Name", "Location"]].drop_duplicates().reset_index(drop=True)
+                    st.subheader(f"Competitor Results ({len(result_df)})")
+                    st.dataframe(result_df, use_container_width=True)
+                else:
+                    st.info(f"Competitor '{name_query}' not found.")
