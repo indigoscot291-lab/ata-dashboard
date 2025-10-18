@@ -606,7 +606,7 @@ elif page_choice == "National & District Rings":
                     )
                     results = rings_df.loc[mask].copy()
 
-        else search_type == "ATA Number":
+        else: search_type == "ATA Number":
             div_col = col_map.get("ATA#")
             if div_col:
                 atanums = sorted(rings_df[div_col].dropna().astype(str).unique())
@@ -622,6 +622,7 @@ elif page_choice == "National & District Rings":
                          height=600)
         else:
             st.info("No results found. Enter a search term, select a division, or enter a License Number.")
+
 
 
 
