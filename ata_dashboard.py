@@ -536,22 +536,25 @@ elif page_choice == "National & District Rings":
                 if sel_div:
                     results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
 
-     else:  # Member License Number
-        lic_query = st.text_input("Enter License Number:").strip()
-        if lic_query:
-            members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
-            if not members_filtered.empty:
-                members_filtered['FullName'] = (
+        else:  # Member License Number
+            lic_query = st.text_input("Enter License Number:").strip()
+            if lic_query:
+                members_filtered = members_df[members_df['LicenseNumber'].astype(str) == lic_query]
+                if not members_filtered.empty:
+                    members_filtered['FullName'] = (
                     members_filtered['MemberFirstName'].str.strip() + " " +
                     members_filtered['MemberLastName'].str.strip()
                 ).str.lower()
+
                 ln_col = col_map.get("LAST NAME")
                 fn_col = col_map.get("FIRST NAME")
+
                 if ln_col and fn_col:
                     rings_fullname = (
                         rings_df[fn_col].astype(str).str.strip() + " " +
-                        rings_df[ln_col].astype(str).str.strip()   # <-- FIXED
+                        rings_df[ln_col].astype(str).str.strip()
                     ).str.lower()
+
                     mask = rings_fullname.isin(members_filtered['FullName'])
                     results = rings_df.loc[mask].copy()
  
@@ -569,6 +572,7 @@ elif page_choice == "National & District Rings":
     elif section_choice == "Judging Assignment":
         st.subheader("Judging Assignments")
         st.info("Placeholder – data and layout coming soon!")
+
 
 
 
