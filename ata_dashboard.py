@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import io
+import concurrent.futures
 
 # Page config
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
@@ -593,8 +594,6 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
-import concurrent.futures
-
 # --- PAGE 4: Competitor Search ---
 elif page_choice == "Competitor Search":
     st.title("Competitor Search")
@@ -676,3 +675,4 @@ elif page_choice == "Competitor Search":
                 st.dataframe(results_df, use_container_width=True, hide_index=True)
             else:
                 st.info("Competitor not found in selected Age Group(s) and State.")
+
