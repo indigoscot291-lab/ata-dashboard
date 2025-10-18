@@ -611,15 +611,12 @@ elif page_choice == "Competitor Search":
     name_query = st.text_input("Enter Competitor Name (required):").strip()
     age_groups_choice = st.multiselect(
         "Optional: Select Age Group(s) / Rank(s):",
-        sorted(matrix_df['Age Group'].dropna().unique()),
-        default=[]
+        sorted(matrix_df['Age Group'].dropna().unique())
     )
     state_choice = st.selectbox(
         "Optional: Select State:",
-        ["All"] + sorted(REGION_CODES.keys()) + ["International"],
-        index=0
+        ["All"] + sorted(REGION_CODES.keys()) + ["International"]
     )
-
     search_btn = st.button("Search")
 
     if search_btn:
@@ -627,23 +624,32 @@ elif page_choice == "Competitor Search":
             st.warning("Please enter a competitor name to search.")
         else:
             # Determine codes for selected age groups
-            selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)] if age_groups_choice else matrix_df
+            if age_groups_choice:
+                selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)]
+            else:
+                selected_matrix = matrix_df
             codes_age_map = dict(zip(selected_matrix['Code'], selected_matrix['Age Group']))
 
             combined_rows = []
 
             def fetch_age_group_data(age_code):
-                # Fetch all regions
                 rows = []
-
-                # If All or International selected, fetch world data
                 urls = []
-                if state_choice in ["All", "International"]:
+
+                if state_choice == "All":
+                    # Fetch every state + world standings
+                    for state_name, (country, state_abbr) in REGION_CODES.items():
+                        urls.append(
+                            f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr.lower()}&code={age_code}"
+                        )
                     urls.append(f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}")
-                # If specific state
-                if state_choice not in ["All", "International"]:
+                elif state_choice == "International":
+                    urls.append(f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}")
+                else:
                     country, state_abbr = REGION_CODES[state_choice]
-                    urls.append(f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr}&code={age_code}")
+                    urls.append(
+                        f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr.lower()}&code={age_code}"
+                    )
 
                 for url in urls:
                     html = fetch_html(url)
@@ -665,24 +671,19 @@ elif page_choice == "Competitor Search":
                 for future in concurrent.futures.as_completed(futures):
                     combined_rows.extend(future.result())
 
-            # Filter by name (partial match, case-insensitive)
+            # Filter by name (partial, case-insensitive)
             filtered = [
                 e for e in combined_rows
                 if name_query.lower() in e["Name"].lower()
             ]
 
-            # Filter by state if not All or International
-            if state_choice not in ["All", "International"]:
-                _, state_abbr = REGION_CODES[state_choice]
-                filtered = [e for e in filtered if e["Location"].endswith(f", {state_abbr}")]
-
-            # Filter by International (entries not ending with US or CA)
-            if state_choice == "International":
-                filtered = [e for e in filtered if not re.search(r",\s*(US|CA)$", e["Location"])]
-
             if filtered:
-                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name","Location","Age Group"]).reset_index(drop=True)
+                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name", "Location", "Age Group"]).reset_index(drop=True)
                 st.subheader(f"Search Results ({len(results_df)} found)")
-                st.dataframe(results_df[["Name","Location","Age Group"]], use_container_width=True, hide_index=True)
+                st.dataframe(
+                    results_df[["Name", "Location", "Age Group"]],
+                    use_container_width=True,
+                    hide_index=True
+                )
             else:
                 st.info("Competitor not found in selected Age Group(s) and State.")
