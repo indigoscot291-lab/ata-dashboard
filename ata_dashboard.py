@@ -594,90 +594,91 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
-# --- PAGE: Competitor Search ---
+import concurrent.futures
+
+# --- PAGE 4: Competitor Search ---
 elif page_choice == "Competitor Search":
     st.title("Competitor Search")
 
-    # Mobile check
-    is_mobile = st.radio("Are you on a mobile device?", ["No", "Yes"]) == "Yes"
+    # Load Age Group / Code matrix
+    MATRIX_SHEET_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
+    try:
+        matrix_df = pd.read_csv(MATRIX_SHEET_URL)
+        st.success("✅ Age Group matrix loaded")
+    except Exception as e:
+        st.error(f"Failed to load Age Group matrix: {e}")
+        st.stop()
 
-    # --- INPUTS ---
-    name_query = st.text_input("Enter competitor name (mandatory):").strip().lower()
+    # --- SEARCH INPUTS ---
+    name_query = st.text_input("Enter Competitor Name (required):").strip().lower()
 
-    # Load Age Group matrix
-    MATRIX_URL = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv"
-    age_matrix = pd.read_csv(MATRIX_URL, dtype=str)
-    age_groups = ["All"] + age_matrix["Age Group"].tolist()
-    selected_age_groups = st.multiselect("Select Age Group/Rank (optional):", age_groups, default=["All"])
+    age_groups_choice = st.multiselect(
+        "Optional: Select Age Group(s) / Rank(s):",
+        sorted(matrix_df['Age Group'].dropna().unique())
+    )
 
-    # State selector
-    state_options = ["All"] + list(REGION_CODES.keys()) + ["International"]
-    selected_state = st.selectbox("Select State (optional):", state_options, index=0)
+    state_choice = st.selectbox(
+        "Optional: Select State:",
+        [""] + sorted(REGION_CODES.keys()) + ["International"]
+    )
 
-    # --- SEARCH BUTTON ---
-    if st.button("Search"):
+    search_btn = st.button("Search")
+
+    if search_btn:
         if not name_query:
-            st.warning("Please enter a name to search.")
+            st.warning("Please enter a competitor name to search.")
         else:
-            # Determine codes to search
-            if "All" in selected_age_groups:
-                codes_to_search = age_matrix["Code"].tolist()
+            # Determine codes for selected age groups
+            if age_groups_choice:
+                selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)]
             else:
-                codes_to_search = age_matrix.loc[age_matrix["Age Group"].isin(selected_age_groups), "Code"].tolist()
+                selected_matrix = matrix_df
+            codes_age_map = dict(zip(selected_matrix['Code'], selected_matrix['Age Group']))
 
-            # Determine regions to fetch
-            if selected_state == "All":
-                regions_to_search = list(REGION_CODES.keys())
-            elif selected_state == "International":
-                regions_to_search = []
-            else:
-                regions_to_search = [selected_state]
+            combined_rows = []
 
-            st.info(f"Searching for '{name_query}' in Age Group(s): {', '.join(selected_age_groups)}; State: {selected_state} ...")
-
-            # --- PARALLEL FETCH FUNCTION ---
-            import concurrent.futures
-
-            def fetch_name_matches(code, region):
-                if region in REGION_CODES:
-                    country, state_code = REGION_CODES[region]
-                    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_code}&code={code}"
-                else:  # International
-                    url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={code}"
-                html = fetch_html(url)
-                if html:
-                    data = parse_standings(html)
-                    matched = []
-                    for ev_entries in data.values():
-                        for e in ev_entries:
-                            if name_query in e["Name"].lower():
-                                e_copy = e.copy()
-                                e_copy["Age Group"] = age_matrix.loc[age_matrix["Code"]==code, "Age Group"].values[0]
-                                matched.append(e_copy)
-                    return matched
-                return []
-
-            # --- PARALLEL EXECUTION ---
-            results_list = []
-            with st.spinner("Fetching data..."):
-                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-                    futures = []
-                    for code in codes_to_search:
-                        if not regions_to_search:  # International
-                            futures.append(executor.submit(fetch_name_matches, code, ""))
-                        else:
-                            for region in regions_to_search:
-                                futures.append(executor.submit(fetch_name_matches, code, region))
-                    for fut in concurrent.futures.as_completed(futures):
-                        results_list.extend(fut.result())
-
-            # --- DISPLAY RESULTS ---
-            if results_list:
-                result_df = pd.DataFrame(results_list)[["Name", "Location", "Age Group"]]
-                st.subheader(f"Results ({len(result_df)})")
-                if is_mobile:
-                    st.dataframe(result_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+            def fetch_age_group_data(age_code):
+                # Build search URL
+                if state_choice and state_choice != "International":
+                    if state_choice in REGION_CODES:
+                        country, state_abbr = REGION_CODES[state_choice]
+                        url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr}&code={age_code}"
+                    else:
+                        return []  # Invalid state, skip
                 else:
-                    st.dataframe(result_df.reset_index(drop=True), use_container_width=True, hide_index=True)
+                    url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}"
+
+                html = fetch_html(url)
+                if not html:
+                    st.warning(f"Could not fetch data for Age Group code {age_code}. Skipping...")
+                    return []
+
+                parsed_data = parse_standings(html)
+                results = []
+                for ev_entries in parsed_data.values():
+                    for e in ev_entries:
+                        results.append({
+                            "Name": e["Name"],
+                            "Location": e["Location"],
+                            "Age Group": codes_age_map[age_code]
+                        })
+                return results
+
+            # --- Parallel fetch ---
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = [executor.submit(fetch_age_group_data, code) for code in codes_age_map]
+                for future in concurrent.futures.as_completed(futures):
+                    combined_rows.extend(future.result())
+
+            # Filter by name (partial match, case-insensitive)
+            filtered = [
+                e for e in combined_rows
+                if name_query in e["Name"].lower()
+            ]
+
+            if filtered:
+                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name","Location","Age Group"]).reset_index(drop=True)
+                st.subheader(f"Search Results ({len(results_df)} found)")
+                st.dataframe(results_df[["Name","Location","Age Group"]], use_container_width=True, hide_index=True)
             else:
-                st.info("No results found.")
+                st.info("Competitor not found in selected Age Group(s) and State.")
