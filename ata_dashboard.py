@@ -555,7 +555,6 @@ elif page_choice == "National & District Rings":
         try:
             rings_df = pd.read_csv(JUDGE_CSV_URL)
             st.success("✅ Judges sheet loaded successfully")
-            st.write(rings_df.head())  # Debug
         except Exception as e:
             st.error(f"Failed to load Judges sheet: {e}")
             st.stop()
@@ -593,3 +592,4 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
+
