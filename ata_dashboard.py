@@ -566,13 +566,12 @@ elif page_choice == "National & District Rings":
         else:
             st.info("No results found. Enter a search term, select a division, or enter a License Number.")
 
-  # --- JUDGING ASSIGNMENTS ---
+# --- JUDGING ASSIGNMENTS ---
 elif section_choice == "Judging Assignment":
     st.subheader("Judging Assignments")
-    
     # Direct CSV export link from Google Sheet
     JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-   
+
     # Load Rings sheet
     try:
         rings_df = pd.read_csv(JUDGE_CSV_URL)
@@ -583,11 +582,7 @@ elif section_choice == "Judging Assignment":
 
     # Keep original headers for display
     original_columns = list(rings_df.columns)
-
-    # Create processing headers using only the top word (first line of multi-line cells)
     processing_columns = [c.split("\n")[0].strip() for c in rings_df.columns]
-
-    # Map processing column names to original columns
     col_map = dict(zip(processing_columns, original_columns))
 
     # --- SEARCH OPTIONS ---
@@ -615,7 +610,6 @@ elif section_choice == "Judging Assignment":
             if sel_div:
                 results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
 
-    # --- DISPLAY RESULTS ---
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
         st.dataframe(
