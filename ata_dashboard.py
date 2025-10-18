@@ -569,19 +569,16 @@ elif page_choice == "National & District Rings":
 # --- JUDGING ASSIGNMENTS ---
 elif section_choice == "Judging Assignment":
     st.subheader("Judging Assignments")
-
-    # Debug: indicate the block is entered
-    st.write("🔹 Entered Judging Assignments section")
+    st.write("✅ Entered Judging Assignments block")  # Debug
 
     # Direct CSV export link from Google Sheet
     JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-    st.write("Attempting to read CSV from:", JUDGE_CSV_URL)
 
-    # Load Rings sheet
+    # Load Judges sheet
     try:
         rings_df = pd.read_csv(JUDGE_CSV_URL)
         st.success("✅ Judges sheet loaded successfully")
-        st.write("Columns found:", list(rings_df.columns))
+        st.write(rings_df.head())  # Debug: show first few rows
     except Exception as e:
         st.error(f"Failed to load Judges sheet: {e}")
         st.stop()
@@ -601,7 +598,6 @@ elif section_choice == "Judging Assignment":
 
     if search_type == "Name":
         name_query = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
-        st.write("Name search query:", name_query)
         if name_query:
             ln_col = col_map.get("LAST NAME")
             fn_col = col_map.get("FIRST NAME")
@@ -614,20 +610,21 @@ elif section_choice == "Judging Assignment":
                 results = rings_df.loc[mask].copy()
 
     elif search_type == "ATA Number":
-        atanums_col = col_map.get("ATA#")
-        if atanums_col:
-            atanums = sorted(rings_df[atanums_col].dropna().astype(str).unique())
-            sel_ata = st.selectbox("Select ATA Number (or leave blank):", [""] + atanums)
-            st.write("Selected ATA Number:", sel_ata)
-            if sel_ata:
-                results = rings_df[rings_df[atanums_col].astype(str) == sel_ata].copy()
+        div_col = col_map.get("ATA#")
+        if div_col:
+            atanums = sorted(rings_df[div_col].dropna().astype(str).unique())
+            sel_div = st.selectbox("Select ATA Number (or leave blank):", [""] + atanums)
+            if sel_div:
+                results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
 
     # Display results
     st.subheader(f"Search Results ({len(results)})")
     if not results.empty:
-        st.dataframe(results.reset_index(drop=True),
-                     use_container_width=True,
-                     hide_index=True,
-                     height=600)
+        st.dataframe(
+            results.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+            height=600
+        )
     else:
         st.info("No results found. Enter a search term or select an ATA Number.")
