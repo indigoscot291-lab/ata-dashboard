@@ -628,9 +628,10 @@ elif page_choice == "Competitor Search":
         else:
             # Determine codes for selected age groups
             if age_groups_choice:
-                codes = matrix_df.loc[matrix_df['Age Group'].isin(age_groups_choice), 'Code'].dropna().tolist()
+                selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)]
             else:
-                codes = matrix_df['Code'].dropna().tolist()  # Default: all codes
+                selected_matrix = matrix_df
+            codes_age_map = dict(zip(selected_matrix['Code'], selected_matrix['Age Group']))
 
             combined_rows = []
 
@@ -653,26 +654,29 @@ elif page_choice == "Competitor Search":
                 parsed_data = parse_standings(html)
                 results = []
                 for ev_entries in parsed_data.values():
-                    results.extend(ev_entries)
+                    for e in ev_entries:
+                        results.append({
+                            "Name": e["Name"],
+                            "Location": e["Location"],
+                            "Age Group": codes_age_map[age_code]
+                        })
                 return results
 
             # --- Parallel fetch ---
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = [executor.submit(fetch_age_group_data, code) for code in codes]
+                futures = [executor.submit(fetch_age_group_data, code) for code in codes_age_map]
                 for future in concurrent.futures.as_completed(futures):
                     combined_rows.extend(future.result())
 
             # Filter by name (partial match, case-insensitive)
             filtered = [
-                {"Name": e["Name"], "Location": e["Location"]}
-                for e in combined_rows
+                e for e in combined_rows
                 if name_query in e["Name"].lower()
             ]
 
             if filtered:
-                results_df = pd.DataFrame(filtered).drop_duplicates().reset_index(drop=True)
+                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name","Location","Age Group"]).reset_index(drop=True)
                 st.subheader(f"Search Results ({len(results_df)} found)")
-                st.dataframe(results_df, use_container_width=True, hide_index=True)
+                st.dataframe(results_df[["Name","Location","Age Group"]], use_container_width=True, hide_index=True)
             else:
                 st.info("Competitor not found in selected Age Group(s) and State.")
-
