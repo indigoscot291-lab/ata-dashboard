@@ -481,7 +481,24 @@ elif page_choice == "National & District Rings":
         else:
             st.info("No results found. Enter a search term, select a division, or enter a License Number.")
 
-     elif section_choice == "Creative & Xtreme":
+ # --- PAGE 3: National & District Rings ---
+elif page_choice == "National & District Rings":
+    st.title("National & District Tournament Rings")
+
+    # Add a dropdown selector
+    section_choice = st.selectbox(
+        "Select Category:",
+        ["Traditional", "Creative & Xtreme", "Judging Assignment"],
+        index=0
+    )
+
+    import io
+
+    if section_choice == "Traditional":
+        st.subheader("Traditional Rings")
+        # (your existing Traditional code here)
+
+    elif section_choice == "Creative & Xtreme":
         st.subheader("Creative & Xtreme Rings")
 
         # Direct CSV export link from Google Sheet
@@ -569,7 +586,7 @@ elif page_choice == "National & District Rings":
         else:
             st.info("No results found. Enter a search term, select a division, or enter a License Number.")
 
-    elif section_choice == "Judging Assignments":
+    elif section_choice == "Judging Assignment":
         st.subheader("Judging Assignments")
         st.info("Placeholder – data and layout coming soon!")
  
