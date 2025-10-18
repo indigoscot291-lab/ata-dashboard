@@ -616,7 +616,8 @@ elif page_choice == "Competitor Search":
     )
     state_choice = st.selectbox(
         "Optional: Select State:",
-        ["All"] + sorted(REGION_CODES.keys()) + ["International"]
+        ["All"] + sorted(REGION_CODES.keys()) + ["International"],
+        index=0
     )
 
     search_btn = st.button("Search")
@@ -626,39 +627,37 @@ elif page_choice == "Competitor Search":
             st.warning("Please enter a competitor name to search.")
         else:
             # Determine codes for selected age groups
-            if age_groups_choice:
-                selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)]
-            else:
-                selected_matrix = matrix_df
-
+            selected_matrix = matrix_df[matrix_df['Age Group'].isin(age_groups_choice)] if age_groups_choice else matrix_df
             codes_age_map = dict(zip(selected_matrix['Code'], selected_matrix['Age Group']))
 
             combined_rows = []
 
             def fetch_age_group_data(age_code):
-                # Build search URL
-                if state_choice != "All" and state_choice != "International":
+                # Fetch all regions
+                rows = []
+
+                # If All or International selected, fetch world data
+                urls = []
+                if state_choice in ["All", "International"]:
+                    urls.append(f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}")
+                # If specific state
+                if state_choice not in ["All", "International"]:
                     country, state_abbr = REGION_CODES[state_choice]
-                    url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr}&code={age_code}"
-                elif state_choice == "International":
-                    url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}"
-                else:  # All states + worlds
-                    url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}"
+                    urls.append(f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr}&code={age_code}")
 
-                html = fetch_html(url)
-                if not html:
-                    return []
-
-                parsed_data = parse_standings(html)
-                results = []
-                for ev_entries in parsed_data.values():
-                    for e in ev_entries:
-                        results.append({
-                            "Name": e["Name"],
-                            "Location": e["Location"],
-                            "Age Group": codes_age_map[age_code]
-                        })
-                return results
+                for url in urls:
+                    html = fetch_html(url)
+                    if not html:
+                        continue
+                    parsed_data = parse_standings(html)
+                    for ev_entries in parsed_data.values():
+                        for e in ev_entries:
+                            rows.append({
+                                "Name": e["Name"].strip(),
+                                "Location": e["Location"].strip(),
+                                "Age Group": codes_age_map[age_code]
+                            })
+                return rows
 
             # --- Parallel fetch ---
             with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -672,9 +671,18 @@ elif page_choice == "Competitor Search":
                 if name_query.lower() in e["Name"].lower()
             ]
 
+            # Filter by state if not All or International
+            if state_choice not in ["All", "International"]:
+                _, state_abbr = REGION_CODES[state_choice]
+                filtered = [e for e in filtered if e["Location"].endswith(f", {state_abbr}")]
+
+            # Filter by International (entries not ending with US or CA)
+            if state_choice == "International":
+                filtered = [e for e in filtered if not re.search(r",\s*(US|CA)$", e["Location"])]
+
             if filtered:
-                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name", "Location", "Age Group"]).reset_index(drop=True)
+                results_df = pd.DataFrame(filtered).drop_duplicates(subset=["Name","Location","Age Group"]).reset_index(drop=True)
                 st.subheader(f"Search Results ({len(results_df)} found)")
-                st.dataframe(results_df[["Name", "Location", "Age Group"]], use_container_width=True, hide_index=True)
+                st.dataframe(results_df[["Name","Location","Age Group"]], use_container_width=True, hide_index=True)
             else:
                 st.info("Competitor not found in selected Age Group(s) and State.")
