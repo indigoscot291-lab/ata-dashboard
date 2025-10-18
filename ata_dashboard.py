@@ -593,6 +593,8 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
+import concurrent.futures
+
 # --- PAGE 4: Competitor Search ---
 elif page_choice == "Competitor Search":
     st.title("Competitor Search")
@@ -609,14 +611,14 @@ elif page_choice == "Competitor Search":
     # --- SEARCH INPUTS ---
     name_query = st.text_input("Enter Competitor Name (required):").strip().lower()
 
-    age_group_choice = st.selectbox(
-        "Optional: Select Age Group / Rank:",
-        [""] + sorted(matrix_df['Age Group'].dropna().unique())
+    age_groups_choice = st.multiselect(
+        "Optional: Select Age Group(s) / Rank(s):",
+        sorted(matrix_df['Age Group'].dropna().unique())
     )
 
     state_choice = st.selectbox(
         "Optional: Select State:",
-        [""] + sorted(REGION_CODES.keys())
+        [""] + sorted(REGION_CODES.keys()) + ["International"]
     )
 
     search_btn = st.button("Search")
@@ -625,45 +627,52 @@ elif page_choice == "Competitor Search":
         if not name_query:
             st.warning("Please enter a competitor name to search.")
         else:
-            # Determine code for selected age group
-            age_code = ""
-            if age_group_choice:
-                match = matrix_df.loc[matrix_df['Age Group'] == age_group_choice, 'Code']
-                if not match.empty:
-                    age_code = match.iloc[0]
-
-            if not age_code:
-                st.warning("Please select a valid Age Group/Rank.")
+            # Determine codes for selected age groups
+            if age_groups_choice:
+                codes = matrix_df.loc[matrix_df['Age Group'].isin(age_groups_choice), 'Code'].dropna().tolist()
             else:
+                codes = matrix_df['Code'].dropna().tolist()  # Default: all codes
+
+            combined_rows = []
+
+            def fetch_age_group_data(age_code):
                 # Build search URL
-                if state_choice and state_choice in REGION_CODES:
-                    country, state_abbr = REGION_CODES[state_choice]
-                    search_url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr}&code={age_code}"
-                else:
-                    # No state, just use world/state-wide URL pattern
-                    search_url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}"
-
-                html = fetch_html(search_url)
-                if not html:
-                    st.error("Could not fetch data from ATA website.")
-                else:
-                    parsed_data = parse_standings(html)
-
-                    # Combine all events for search
-                    combined_rows = []
-                    for ev, entries in parsed_data.items():
-                        combined_rows.extend(entries)
-
-                    # Filter by name (partial match, case-insensitive)
-                    filtered = [
-                        {"Name": e["Name"], "Location": e["Location"]}
-                        for e in combined_rows
-                        if name_query in e["Name"].lower()
-                    ]
-
-                    if filtered:
-                        results_df = pd.DataFrame(filtered).drop_duplicates().reset_index(drop=True)
-                        st.subheader(f"Search Results ({len(results_df)} found)")
-                        st.dataframe(results_df, use_container_width=True, hide_index=True)
+                if state_choice and state_choice != "International":
+                    if state_choice in REGION_CODES:
+                        country, state_abbr = REGION_CODES[state_choice]
+                        url = f"https://atamartialarts.com/events/tournament-standings/state-standings/?country={country}&state={state_abbr}&code={age_code}"
                     else:
-                        st.info("Competitor not found in selected Age Group/Rank and State.")
+                        return []  # Invalid state, skip
+                else:
+                    url = f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={age_code}"
+
+                html = fetch_html(url)
+                if not html:
+                    st.warning(f"Could not fetch data for Age Group code {age_code}. Skipping...")
+                    return []
+
+                parsed_data = parse_standings(html)
+                results = []
+                for ev_entries in parsed_data.values():
+                    results.extend(ev_entries)
+                return results
+
+            # --- Parallel fetch ---
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = [executor.submit(fetch_age_group_data, code) for code in codes]
+                for future in concurrent.futures.as_completed(futures):
+                    combined_rows.extend(future.result())
+
+            # Filter by name (partial match, case-insensitive)
+            filtered = [
+                {"Name": e["Name"], "Location": e["Location"]}
+                for e in combined_rows
+                if name_query in e["Name"].lower()
+            ]
+
+            if filtered:
+                results_df = pd.DataFrame(filtered).drop_duplicates().reset_index(drop=True)
+                st.subheader(f"Search Results ({len(results_df)} found)")
+                st.dataframe(results_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Competitor not found in selected Age Group(s) and State.")
