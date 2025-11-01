@@ -399,6 +399,8 @@ elif page_choice == "National & District Rings":
         RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/19RYwkLfzdwg8r105flePpgRbbf5RvHM3JZohS1bKBDY/pub?output=csv&gid=253724932"
         MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
+        #https://docs.google.com/spreadsheets/d/19RYwkLfzdwg8r105flePpgRbbf5RvHM3JZohS1bKBDY/edit?usp=sharing
+
         # Load Rings sheet
         try:
             rings_df = pd.read_csv(RINGS_CSV_URL)
@@ -595,4 +597,5 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
+
 
