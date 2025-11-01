@@ -395,7 +395,8 @@ elif page_choice == "National & District Rings":
 
     # --- TRADITIONAL ---
     if section_choice == "Traditional":
-        RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1314980945"
+        #RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1314980945"
+        RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/19RYwkLfzdwg8r105flePpgRbbf5RvHM3JZohS1bKBDY/pub?output=csv&gid=253724932"
         MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
         # Load Rings sheet
@@ -594,3 +595,4 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
+
