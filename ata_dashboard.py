@@ -555,7 +555,7 @@ elif page_choice == "National & District Rings":
         st.write("✅ Entered Judging Assignments block")  # Debug
 
         #This was ATA JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-        JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI//gviz/tq?tqx=out:csv&gid=993945995"
+        JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI/gviz/tq?tqx=out:csv&gid=993945995"
         
         try:
             rings_df = pd.read_csv(JUDGE_CSV_URL)
@@ -597,6 +597,7 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
+
 
 
 
