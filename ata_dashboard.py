@@ -477,7 +477,7 @@ elif page_choice == "National & District Rings":
     elif section_choice == "Creative & Xtreme":
         st.subheader("Creative & Xtreme Rings")
 
-        #XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
+        #This was ATA XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
         XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1SPoBVRM27TvqDc1SlegCdi5K5mY6kjTSPDTnp0qgAHQ/gviz/tq?tqx=out:csv&gid=1329644400"
         MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
@@ -554,8 +554,9 @@ elif page_choice == "National & District Rings":
         st.subheader("Judging Assignments")
         st.write("✅ Entered Judging Assignments block")  # Debug
 
-        JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-
+        #This was ATA JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
+        JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI//gviz/tq?tqx=out:csv&gid=993945995"
+        
         try:
             rings_df = pd.read_csv(JUDGE_CSV_URL)
             st.success("✅ Judges sheet loaded successfully")
@@ -596,6 +597,7 @@ elif page_choice == "National & District Rings":
             st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
         else:
             st.info("No results found. Enter a search term or select an ATA Number.")
+
 
 
 
