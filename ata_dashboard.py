@@ -70,24 +70,16 @@ sheet_id = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 def load_all_title_tabs(sheet_id: str):
     """Loads all tabs from a Google Sheet where each tab represents a title."""
 
-    # Step 1: Fetch the spreadsheet metadata
-    meta_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:json"
-    r = requests.get(meta_url)
-    raw = r.text
+    import requests
+    import pandas as pd
+    import re
 
-    # Extract JSON
-    json_str = raw[raw.find("{") : raw.rfind("}") + 1]
-    meta = json.loads(json_str)
-
-    # Step 2: Extract sheet names + gids
-    sheet_info = meta["table"]["cols"]  # Google hides sheet metadata elsewhere
-
-    # Correct metadata endpoint
+    # Fetch the text version of the spreadsheet metadata
     txt_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}?format=txt"
-    r2 = requests.get(txt_url)
-    txt = r2.text
+    r = requests.get(txt_url)
+    txt = r.text
 
-    # Extract all gids
+    # Extract all sheet gids
     gids = re.findall(r"gid=(\d+)", txt)
     gids = list(dict.fromkeys(gids))  # remove duplicates
 
@@ -102,10 +94,11 @@ def load_all_title_tabs(sheet_id: str):
             df = pd.read_csv(csv_url)
             sheet_name = names[i] if i < len(names) else f"Title {gid}"
             all_tabs[sheet_name] = df
-        except:
-            pass
+        except Exception as e:
+            print(f"Failed to load gid {gid}: {e}")
 
     return all_tabs
+
 
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
