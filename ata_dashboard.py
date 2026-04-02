@@ -87,8 +87,8 @@ TITLE_TABS = {
     "24-25 FL State Title 50-59 Color Belt": 1239264195,
     "24-25 SE District Title 50-59 Color Belt": 632203910,
     "23-24 SE District Title 50-59 Color Belt": 1408227945,
-    "24-25 SE District Title 50-59 1st BB": 1588231489,
-    "24-25 SE World Title 50-59 1st BB": 250495899
+    "24-25 SE District Title 50-59 1st Degree Black Belt": 1588231489,
+    "24-25 World Title 50-59 1st Degree Black Belt": 250495899
 }
 
 all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
