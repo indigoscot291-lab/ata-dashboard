@@ -871,6 +871,13 @@ elif page_choice == "Historical Titles":
 
     SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
+    html_url = f"https://docs.google.com/spreadsheets/d/1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc/edit"
+    import requests
+    html = requests.get(html_url).text
+
+    st.write(html[:5000])
+
+
     all_titles = load_all_title_tabs(SHEET_ID)
 
     if not all_titles:
