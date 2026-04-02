@@ -64,20 +64,6 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
-SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
-
-TITLE_TABS = {
-    "23-24 GA State Title 50-59 Color Belt": 1450148970,
-    "24-25 GA State Title 50-59 Color Belt": 0,
-    "24-25 FL State Title 50-59 Color Belt": 1239264195,
-    "24-25 SE District Title 50-59 Color Belt": 632203910,
-    "23-24 SE District Title 50-59 Color Belt": 1408227945,
-    "24-25 SE District Title 50-59 1st BB": 1588231489,
-    "24-25 SE World Title 50-59 1st BB": 250495899
-}
-
-all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
-
 tab_names = list(all_titles.keys())
 selected_tab = st.selectbox("Select Title:", ["All Titles Combined"] + tab_names)
 
@@ -96,6 +82,20 @@ def load_all_title_tabs(sheet_id: str, tabs: dict):
             print(f"Failed to load sheet {title} (gid={gid}): {e}")
 
     return all_tabs
+SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
+
+TITLE_TABS = {
+    "23-24 GA State Title 50-59 Color Belt": 1450148970,
+    "24-25 GA State Title 50-59 Color Belt": 0,
+    "24-25 FL State Title 50-59 Color Belt": 1239264195,
+    "24-25 SE District Title 50-59 Color Belt": 632203910,
+    "23-24 SE District Title 50-59 Color Belt": 1408227945,
+    "24-25 SE District Title 50-59 1st BB": 1588231489,
+    "24-25 SE World Title 50-59 1st BB": 250495899
+}
+
+all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
+    
 
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
