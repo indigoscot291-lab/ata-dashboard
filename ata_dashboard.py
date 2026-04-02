@@ -854,87 +854,17 @@ elif page_choice == "National & District Rings":
 elif page_choice == "Historical Titles":
     st.title("Historical Titles Dashboard")
 
-    SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
-
-    all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
-
-    if not all_titles:
-        st.error("No title tabs found.")
-        st.stop()
-
+    # List of available title sheets
     tab_names = list(all_titles.keys())
 
+    # User selects a specific title sheet
     selected_tab = st.selectbox(
         "Select Title:",
         tab_names
     )
 
-df = all_titles[selected_tab]
-st.dataframe(df, use_container_width=True, hide_index=True)
+    # Load the selected sheet
+    df = all_titles[selected_tab]
 
-
-    st.subheader(f"Viewing: {selected_tab}")
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
-    # --- Search ---
-    st.subheader("Search Competitors")
-    name_filter = st.text_input("Search by name:").strip().lower()
-
-    filtered = df.copy()
-    if name_filter:
-        filtered = filtered[
-            filtered.apply(lambda row: row.astype(str).str.lower().str.contains(name_filter).any(), axis=1)
-        ]
-
-    st.dataframe(filtered.reset_index(drop=True), use_container_width=True, hide_index=True)
-
-    # --- Competitor Profile ---
-    st.subheader("Competitor Profile")
-    if "Name" in df.columns:
-        competitor_list = sorted(df["Name"].dropna().unique())
-        selected_comp = st.selectbox("Select competitor:", [""] + competitor_list)
-
-        if selected_comp:
-            profile = df[df["Name"] == selected_comp]
-            st.dataframe(profile.reset_index(drop=True), use_container_width=True, hide_index=True)
-
-    # --- Comparison ---
-    st.subheader("Compare Two Competitors")
-    if "Name" in df.columns:
-        col1, col2 = st.columns(2)
-        comp_a = col1.selectbox("Competitor A:", [""] + competitor_list, key="compA")
-        comp_b = col2.selectbox("Competitor B:", [""] + competitor_list, key="compB")
-
-        if comp_a and comp_b:
-            df_a = df[df["Name"] == comp_a]
-            df_b = df[df["Name"] == comp_b]
-            combined = pd.concat([df_a, df_b], keys=[comp_a, comp_b])
-            st.dataframe(combined, use_container_width=True, hide_index=True)
-
-    # --- Title Count Summary ---
-    st.subheader("Title Count Summary")
-    title_cols = [c for c in df.columns if c not in ["Name", "Location"]]
-
-    summary = (
-        df[title_cols]
-        .notna()
-        .astype(int)
-        .sum()
-        .reset_index()
-        .rename(columns={"index": "Title", 0: "Count"})
-    )
-
-    st.dataframe(summary, use_container_width=True, hide_index=True)
-
-    # --- Heatmap ---
-    st.subheader("Title Heatmap")
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-
-    heat_df = df[title_cols].notna().astype(int)
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.heatmap(heat_df, cmap="Blues", cbar=False, ax=ax)
-    st.pyplot(fig)
-        
-
+    # Display the sheet
+    st.dataframe(df, use_container_width=True, hide_index=True)        
