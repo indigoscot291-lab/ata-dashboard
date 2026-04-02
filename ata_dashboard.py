@@ -864,13 +864,14 @@ elif page_choice == "Historical Titles":
 
     tab_names = list(all_titles.keys())
 
-    selected_tab = st.selectbox("Select Title:", ["All Titles Combined"] + tab_names)
+    selected_tab = st.selectbox(
+        "Select Title:",
+        tab_names
+    )
 
-    # --- Load selected title ---
-    if selected_tab == "All Titles Combined":
-        df = pd.concat(all_titles.values(), ignore_index=True)
-    else:
-        df = all_titles[selected_tab]
+df = all_titles[selected_tab]
+st.dataframe(df, use_container_width=True, hide_index=True)
+
 
     st.subheader(f"Viewing: {selected_tab}")
     st.dataframe(df, use_container_width=True, hide_index=True)
