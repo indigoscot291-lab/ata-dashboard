@@ -64,50 +64,38 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
-sheet_id = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
+SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
+
+TITLE_TABS = {
+    "23-24 GA State Title 50-59 Color Belt": 1450148970,
+    "24-25 GA State Title 50-59 Color Belt": 0,
+    "24-25 FL State Title 50-59 Color Belt": 1239264195,
+    "24-25 SE District Title 50-59 Color Belt": 632203910,
+    "23-24 SE District Title 50-59 Color Belt": 1408227945,
+    "24-25 SE District Title 50-59 1st BB": 1588231489,
+    "24-25 SE World Title 50-59 1st BB": 250495899
+}
+
+all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
+
+tab_names = list(all_titles.keys())
+selected_tab = st.selectbox("Select Title:", ["All Titles Combined"] + tab_names)
 
 @st.cache_data(ttl=3600)
-def load_all_title_tabs(sheet_id: str):
-    """Loads all tabs from a Google Sheet by scraping the HTML for sheet metadata."""
-
-    import requests
+def load_all_title_tabs(sheet_id: str, tabs: dict):
     import pandas as pd
-    import json
-    import re
-
-    # Step 1: Fetch the HTML of the spreadsheet
-    html_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
-    r = requests.get(html_url)
-    html = r.text
-
-    # Step 2: Extract the JSON blob containing sheet metadata
-    # Google stores it in a script tag containing "bootstrapData"
-    match = re.search(r"bootstrapData\":(\{.*?\})", html)
-    if not match:
-        return {}
-
-    json_str = match.group(1)
-    data = json.loads(json_str)
-
-    # Step 3: Extract sheet metadata
-    sheets = data["spreadsheet"]["sheets"]
 
     all_tabs = {}
 
-    for sheet in sheets:
-        title = sheet["properties"]["title"]
-        gid = sheet["properties"]["sheetId"]
-
+    for title, gid in tabs.items():
         csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-
         try:
             df = pd.read_csv(csv_url)
             all_tabs[title] = df
         except Exception as e:
-            print(f"Failed to load sheet {title}: {e}")
+            print(f"Failed to load sheet {title} (gid={gid}): {e}")
 
     return all_tabs
-
 
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
@@ -870,13 +858,6 @@ elif page_choice == "Historical Titles":
     st.title("Historical Titles Dashboard")
 
     SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
-
-    html_url = f"https://docs.google.com/spreadsheets/d/1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc/edit"
-    import requests
-    html = requests.get(html_url).text
-
-    st.write(html[:5000])
-
 
     all_titles = load_all_title_tabs(SHEET_ID)
 
