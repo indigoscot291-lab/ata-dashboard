@@ -64,6 +64,49 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
+sheet_id = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
+
+@st.cache_data(ttl=3600)
+def load_all_title_tabs(sheet_id: str):
+    """Loads all tabs from a Google Sheet where each tab represents a title."""
+
+    # Step 1: Fetch the spreadsheet metadata
+    meta_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:json"
+    r = requests.get(meta_url)
+    raw = r.text
+
+    # Extract JSON
+    json_str = raw[raw.find("{") : raw.rfind("}") + 1]
+    meta = json.loads(json_str)
+
+    # Step 2: Extract sheet names + gids
+    sheet_info = meta["table"]["cols"]  # Google hides sheet metadata elsewhere
+
+    # Correct metadata endpoint
+    txt_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}?format=txt"
+    r2 = requests.get(txt_url)
+    txt = r2.text
+
+    # Extract all gids
+    gids = re.findall(r"gid=(\d+)", txt)
+    gids = list(dict.fromkeys(gids))  # remove duplicates
+
+    # Extract sheet names
+    names = re.findall(r"sheet=(.*?)&", txt)
+
+    all_tabs = {}
+
+    for i, gid in enumerate(gids):
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+        try:
+            df = pd.read_csv(csv_url)
+            sheet_name = names[i] if i < len(names) else f"Title {gid}"
+            all_tabs[sheet_name] = df
+        except:
+            pass
+
+    return all_tabs
+
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
@@ -197,6 +240,7 @@ page_choice = st.selectbox(
         "ATA Standings Dashboard",
         "1st Degree Black Belt Women 50-59",
         "National & District Rings",
+        "Historical Titles"
 #        "Competitor Search"
     ]
 )
@@ -820,4 +864,89 @@ elif page_choice == "National & District Rings":
                 st.info("No results found. Enter a search term or select an ATA Number.")
     else:
         st.info(f"🕓 {event_choice} — Coming soon...")
+elif page_choice == "Historical Titles":
+    st.title("Historical Titles Dashboard")
+
+    SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
+
+    all_titles = load_all_title_tabs(SHEET_ID)
+
+    if not all_titles:
+        st.error("No title tabs found.")
+        st.stop()
+
+    tab_names = list(all_titles.keys())
+
+    selected_tab = st.selectbox("Select Title:", ["All Titles Combined"] + tab_names)
+
+    # --- Load selected title ---
+    if selected_tab == "All Titles Combined":
+        df = pd.concat(all_titles.values(), ignore_index=True)
+    else:
+        df = all_titles[selected_tab]
+
+    st.subheader(f"Viewing: {selected_tab}")
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # --- Search ---
+    st.subheader("Search Competitors")
+    name_filter = st.text_input("Search by name:").strip().lower()
+
+    filtered = df.copy()
+    if name_filter:
+        filtered = filtered[
+            filtered.apply(lambda row: row.astype(str).str.lower().str.contains(name_filter).any(), axis=1)
+        ]
+
+    st.dataframe(filtered.reset_index(drop=True), use_container_width=True, hide_index=True)
+
+    # --- Competitor Profile ---
+    st.subheader("Competitor Profile")
+    if "Name" in df.columns:
+        competitor_list = sorted(df["Name"].dropna().unique())
+        selected_comp = st.selectbox("Select competitor:", [""] + competitor_list)
+
+        if selected_comp:
+            profile = df[df["Name"] == selected_comp]
+            st.dataframe(profile.reset_index(drop=True), use_container_width=True, hide_index=True)
+
+    # --- Comparison ---
+    st.subheader("Compare Two Competitors")
+    if "Name" in df.columns:
+        col1, col2 = st.columns(2)
+        comp_a = col1.selectbox("Competitor A:", [""] + competitor_list, key="compA")
+        comp_b = col2.selectbox("Competitor B:", [""] + competitor_list, key="compB")
+
+        if comp_a and comp_b:
+            df_a = df[df["Name"] == comp_a]
+            df_b = df[df["Name"] == comp_b]
+            combined = pd.concat([df_a, df_b], keys=[comp_a, comp_b])
+            st.dataframe(combined, use_container_width=True, hide_index=True)
+
+    # --- Title Count Summary ---
+    st.subheader("Title Count Summary")
+    title_cols = [c for c in df.columns if c not in ["Name", "Location"]]
+
+    summary = (
+        df[title_cols]
+        .notna()
+        .astype(int)
+        .sum()
+        .reset_index()
+        .rename(columns={"index": "Title", 0: "Count"})
+    )
+
+    st.dataframe(summary, use_container_width=True, hide_index=True)
+
+    # --- Heatmap ---
+    st.subheader("Title Heatmap")
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    heat_df = df[title_cols].notna().astype(int)
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.heatmap(heat_df, cmap="Blues", cbar=False, ax=ax)
+    st.pyplot(fig)
+        
 
