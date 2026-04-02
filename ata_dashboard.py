@@ -856,7 +856,7 @@ elif page_choice == "Historical Titles":
 
     SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
-    all_titles = load_all_title_tabs(SHEET_ID)
+    all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
 
     if not all_titles:
         st.error("No title tabs found.")
