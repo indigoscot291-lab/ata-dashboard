@@ -73,9 +73,10 @@ def load_all_title_tabs(sheet_id: str):
     import requests
     import pandas as pd
     import json
+    import re
 
-    # Fetch metadata using gviz endpoint
-    meta_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?&tqx=out:json"
+    # Correct metadata endpoint
+    meta_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?gid=0&access=0"
     r = requests.get(meta_url)
     raw = r.text
 
@@ -83,22 +84,23 @@ def load_all_title_tabs(sheet_id: str):
     json_str = raw[raw.find("{") : raw.rfind("}") + 1]
     meta = json.loads(json_str)
 
-    # Extract sheet list
-    sheets = meta["sheets"]
+    # Extract sheet metadata
+    sheet_list = meta["googleVisualization"]["chart"]["dataSourceUrl"].split("sheet=")
 
+    # Extract sheet names and gids
     all_tabs = {}
 
-    for sheet in sheets:
-        title = sheet["properties"]["title"]
-        gid = sheet["properties"]["sheetId"]
-
-        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-
-        try:
-            df = pd.read_csv(csv_url)
-            all_tabs[title] = df
-        except Exception as e:
-            print(f"Failed to load sheet {title}: {e}")
+    for part in sheet_list[1:]:
+        name = part.split("&")[0]
+        gid_match = re.search(r"gid=(\d+)", part)
+        if gid_match:
+            gid = gid_match.group(1)
+            csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+            try:
+                df = pd.read_csv(csv_url)
+                all_tabs[name] = df
+            except:
+                pass
 
     return all_tabs
 
