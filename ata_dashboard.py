@@ -68,39 +68,43 @@ sheet_id = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
 @st.cache_data(ttl=3600)
 def load_all_title_tabs(sheet_id: str):
-    """Loads all tabs from a Google Sheet where each tab represents a title."""
+    """Loads all tabs from a Google Sheet by scraping the HTML for sheet metadata."""
 
     import requests
     import pandas as pd
     import json
     import re
 
-    # Correct metadata endpoint
-    meta_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?gid=0&access=0"
-    r = requests.get(meta_url)
-    raw = r.text
+    # Step 1: Fetch the HTML of the spreadsheet
+    html_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+    r = requests.get(html_url)
+    html = r.text
 
-    # Extract JSON
-    json_str = raw[raw.find("{") : raw.rfind("}") + 1]
-    meta = json.loads(json_str)
+    # Step 2: Extract the JSON blob containing sheet metadata
+    # Google stores it in a script tag containing "bootstrapData"
+    match = re.search(r"bootstrapData\":(\{.*?\})", html)
+    if not match:
+        return {}
 
-    # Extract sheet metadata
-    sheet_list = meta["googleVisualization"]["chart"]["dataSourceUrl"].split("sheet=")
+    json_str = match.group(1)
+    data = json.loads(json_str)
 
-    # Extract sheet names and gids
+    # Step 3: Extract sheet metadata
+    sheets = data["spreadsheet"]["sheets"]
+
     all_tabs = {}
 
-    for part in sheet_list[1:]:
-        name = part.split("&")[0]
-        gid_match = re.search(r"gid=(\d+)", part)
-        if gid_match:
-            gid = gid_match.group(1)
-            csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-            try:
-                df = pd.read_csv(csv_url)
-                all_tabs[name] = df
-            except:
-                pass
+    for sheet in sheets:
+        title = sheet["properties"]["title"]
+        gid = sheet["properties"]["sheetId"]
+
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+
+        try:
+            df = pd.read_csv(csv_url)
+            all_tabs[title] = df
+        except Exception as e:
+            print(f"Failed to load sheet {title}: {e}")
 
     return all_tabs
 
