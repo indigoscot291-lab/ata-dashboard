@@ -64,9 +64,6 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
-tab_names = list(all_titles.keys())
-selected_tab = st.selectbox("Select Title:", ["All Titles Combined"] + tab_names)
-
 @st.cache_data(ttl=3600)
 def load_all_title_tabs(sheet_id: str, tabs: dict):
     import pandas as pd
@@ -95,7 +92,7 @@ TITLE_TABS = {
 }
 
 all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
-    
+tab_names = list(all_titles.keys()) 
 
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
