@@ -860,17 +860,39 @@ elif page_choice == "National & District Rings":
 elif page_choice == "Historical Titles":
     st.title("Historical Titles Dashboard")
 
-    # List of available title sheets
     tab_names = list(all_titles.keys())
 
-    # User selects a specific title sheet
     selected_tab = st.selectbox(
         "Select Title:",
         tab_names
     )
 
-    # Load the selected sheet
     df = all_titles[selected_tab]
 
-    # Display the sheet
+    # --- Competitor Search Across All Titles ---
+    st.subheader("Search Competitor Across All Titles")
+
+    search_name = st.text_input("Enter competitor name")
+
+    if search_name:
+        results = []
+
+        for title_name, title_df in all_titles.items():
+            # Case-insensitive search
+            matches = title_df[
+                title_df["Competitor"].str.contains(search_name, case=False, na=False)
+            ].copy()
+
+            if not matches.empty:
+                matches["Title Sheet"] = title_name
+                results.append(matches)
+
+        if results:
+            combined = pd.concat(results, ignore_index=True)
+            st.success(f"Found {len(combined)} matching results")
+            st.dataframe(combined, use_container_width=True, hide_index=True)
+        else:
+            st.warning("No results found for that competitor.")
+
+    st.subheader(f"Viewing: {selected_tab}")
     st.dataframe(df, use_container_width=True, hide_index=True)        
