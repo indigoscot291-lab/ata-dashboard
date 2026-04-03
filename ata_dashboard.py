@@ -857,42 +857,47 @@ elif page_choice == "National & District Rings":
                 st.info("No results found. Enter a search term or select an ATA Number.")
     else:
         st.info(f"🕓 {event_choice} — Coming soon...")
-elif page_choice == "Historical Titles":
-    st.title("Historical Titles Dashboard")
+st.subheader("Search Competitor Across All Titles")
 
-    tab_names = list(all_titles.keys())
+search_name = st.text_input("Enter competitor name")
 
-    selected_tab = st.selectbox(
-        "Select Title:",
-        tab_names
-    )
+if search_name:
+    results = []
 
-    df = all_titles[selected_tab]
+    # All possible placement columns where names may appear
+    placement_cols = [
+        "World Champion",
+        "Second",
+        "Third",
+        "District Champion",
+        "State Champion"
+    ]
 
-    # --- Competitor Search Across All Titles ---
-    st.subheader("Search Competitor Across All Titles")
+    for title_name, title_df in all_titles.items():
 
-    search_name = st.text_input("Enter competitor name")
+        # Only search columns that actually exist in this sheet
+        existing_cols = [c for c in placement_cols if c in title_df.columns]
 
-    if search_name:
-        results = []
+        if not existing_cols:
+            continue
 
-        for title_name, title_df in all_titles.items():
-            # Case-insensitive search
-            matches = title_df[
-                title_df["Competitor"].str.contains(search_name, case=False, na=False)
-            ].copy()
+        # Build a mask: competitor appears in ANY placement column
+        mask = False
+        for col in existing_cols:
+            mask = mask | title_df[col].astype(str).str.contains(
+                search_name, case=False, na=False
+            )
 
-            if not matches.empty:
-                matches["Title Sheet"] = title_name
-                results.append(matches)
+        matches = title_df[mask].copy()
 
-        if results:
-            combined = pd.concat(results, ignore_index=True)
-            st.success(f"Found {len(combined)} matching results")
-            st.dataframe(combined, use_container_width=True, hide_index=True)
-        else:
-            st.warning("No results found for that competitor.")
+        if not matches.empty:
+            matches["Title Sheet"] = title_name
+            results.append(matches)
 
-    st.subheader(f"Viewing: {selected_tab}")
-    st.dataframe(df, use_container_width=True, hide_index=True)        
+    if results:
+        combined = pd.concat(results, ignore_index=True)
+        st.success(f"Found {len(combined)} matching results")
+        st.dataframe(combined, use_container_width=True, hide_index=True)
+    else:
+        st.warning("No results found for that competitor.")
+        
