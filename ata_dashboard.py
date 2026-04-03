@@ -922,7 +922,6 @@ elif page_choice == "Historical Titles":
                     continue
 
                 # --- Extract Year + Title from sheet name ---
-                # Example: "23-24 GA State Title 50-59 Color Belt"
                 parts = sheet_name.split(" ", 1)
 
                 if len(parts) == 2:
@@ -946,12 +945,21 @@ elif page_choice == "Historical Titles":
 
                 result_value = ", ".join(result_list)
 
+                # --- Add Year, Title, Event, Result ---
                 matches["Year"] = year
                 matches["Title"] = title_raw
+
+                # Event column (if present)
+                if "Event" in matches.columns:
+                    event_col = matches["Event"]
+                else:
+                    event_col = ""
+
+                matches["Event"] = event_col
                 matches["Result"] = result_value
 
                 # Keep only the useful columns
-                matches = matches[["Year", "Title", "Result"]]
+                matches = matches[["Year", "Title", "Event", "Result"]]
 
                 results.append(matches)
 
