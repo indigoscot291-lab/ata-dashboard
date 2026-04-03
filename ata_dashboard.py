@@ -655,7 +655,7 @@ elif page_choice == "National & District Rings":
         if section_choice == "Traditional":
             # This was ATA RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1314980945"
             #RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/19RYwkLfzdwg8r105flePpgRbbf5RvHM3JZohS1bKBDY/gviz/tq?tqx=out:csv&gid=253724932"
-            RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTTFrARvkMq0WeTbARoOZq-iFeOUgMFya-PEMMVcNsXcIUtjoNmGnzfQ7YJIf7FHw/pubhtml?widget=true&amp;headers=false"
+            RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTTFrARvkMq0WeTbARoOZq-iFeOUgMFya-PEMMVcNsXcIUtjoNmGnzfQ7YJIf7FHw/pub?output=csv"
             MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
             
             # Load Rings sheet
