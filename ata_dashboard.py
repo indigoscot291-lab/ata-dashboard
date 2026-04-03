@@ -815,8 +815,8 @@ elif page_choice == "National & District Rings":
             st.write("✅ Entered Judging Assignments block")  # Debug
 
             #This was ATA JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-            JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI/gviz/tq?tqx=out:csv&gid=993945995"
-            
+            #JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI/gviz/tq?tqx=out:csv&gid=993945995"
+            JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTMNQlDIvId4c_mTWnNldw3XjrjV4Pv0Cf0R3zKkbObBdzvKQqL7leerwIMUpTmHw/pub?output=csv"
             try:
                 rings_df = pd.read_csv(JUDGE_CSV_URL)
                 st.success("✅ Judges sheet loaded successfully")
