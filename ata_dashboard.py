@@ -884,7 +884,7 @@ elif page_choice == "Historical Titles":
         st.dataframe(df, use_container_width=True, hide_index=True)
 
     # ---------------------------------------
-    # 2. SEARCH BY COMPETITOR (enhanced)
+    # 2. SEARCH BY COMPETITOR (row-accurate)
     # ---------------------------------------
     else:
         st.subheader("Search Competitor Across All Titles")
@@ -910,7 +910,7 @@ elif page_choice == "Historical Titles":
                 if not existing_cols:
                     continue
 
-                # Build mask: competitor appears in ANY placement column
+                # Build mask: competitor appears in ANY placement column (row-wise)
                 mask = False
                 for col in existing_cols:
                     mask = mask | title_df[col].astype(str).str.contains(
@@ -937,26 +937,28 @@ elif page_choice == "Historical Titles":
                 else:
                     year = year_raw
 
-                # --- Build a single Result column ---
-                result_list = []
-                for col in existing_cols:
-                    if matches[col].astype(str).str.contains(search_name, case=False, na=False).any():
-                        result_list.append(col)
-
-                result_value = ", ".join(result_list)
-
-                # --- Add Year, Title, Event, Result ---
                 matches["Year"] = year
                 matches["Title"] = title_raw
 
-                # Event column (if present)
-                if "Event" in matches.columns:
-                    event_col = matches["Event"]
-                else:
-                    event_col = ""
+                # --- Per-row Result: which column has this competitor in THIS row? ---
+                def get_result(row):
+                    for col in existing_cols:
+                        val = str(row[col])
+                        if search_name.lower() in val.lower():
+                            return col
+                    return ""
 
-                matches["Event"] = event_col
-                matches["Result"] = result_value
+                matches["Result"] = matches.apply(get_result, axis=1)
+
+                # Drop any rows where we somehow didn't find a result
+                matches = matches[matches["Result"] != ""]
+
+                if matches.empty:
+                    continue
+
+                # Event column (if present)
+                if "Event" not in matches.columns:
+                    matches["Event"] = ""
 
                 # Keep only the useful columns
                 matches = matches[["Year", "Title", "Event", "Result"]]
