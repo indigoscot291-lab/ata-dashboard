@@ -921,14 +921,6 @@ elif page_choice == "Historical Titles":
                 if matches.empty:
                     continue
 
-                # Remove placement columns where they did NOT place
-                for col in placement_cols:
-                    if col in matches.columns:
-                        matches = matches[matches[col].notna() & (matches[col] != "")]
-
-                if matches.empty:
-                    continue
-
                 # --- Extract Year + Title from sheet name ---
                 # Example: "23-24 GA State Title 50-59 Color Belt"
                 parts = sheet_name.split(" ", 1)
@@ -946,22 +938,28 @@ elif page_choice == "Historical Titles":
                 else:
                     year = year_raw
 
+                # --- Build a single Result column ---
+                result_list = []
+                for col in existing_cols:
+                    if matches[col].astype(str).str.contains(search_name, case=False, na=False).any():
+                        result_list.append(col)
+
+                result_value = ", ".join(result_list)
+
                 matches["Year"] = year
                 matches["Title"] = title_raw
+                matches["Result"] = result_value
+
+                # Keep only the useful columns
+                matches = matches[["Year", "Title", "Result"]]
 
                 results.append(matches)
 
             if results:
                 combined = pd.concat(results, ignore_index=True)
 
-                # Reorder columns: Year, Title, then everything else
-                ordered_cols = ["Year", "Title"] + [
-                    c for c in combined.columns
-                    if c not in ["Year", "Title"]
-                ]
-                combined = combined[ordered_cols]
-
-                st.success(f"Found {len(combined)} placements for '{search_name}'")
+                st.success(f"Found {len(combined)} results for '{search_name}'")
                 st.dataframe(combined, use_container_width=True, hide_index=True)
             else:
-                st.warning("No results found for that competitor.")     
+                st.warning("No results found for that competitor.")
+
