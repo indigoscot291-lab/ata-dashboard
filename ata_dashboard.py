@@ -857,47 +857,111 @@ elif page_choice == "National & District Rings":
                 st.info("No results found. Enter a search term or select an ATA Number.")
     else:
         st.info(f"🕓 {event_choice} — Coming soon...")
-st.subheader("Search Competitor Across All Titles")
+elif page_choice == "Historical Titles":
+    st.title("Historical Titles Dashboard")
 
-search_name = st.text_input("Enter competitor name")
+    # --- Search Mode Selector ---
+    search_mode = st.selectbox(
+        "Choose Search Mode:",
+        ["Search by Title", "Search by Competitor"]
+    )
 
-if search_name:
-    results = []
+    # -----------------------------
+    # 1. SEARCH BY TITLE (original)
+    # -----------------------------
+    if search_mode == "Search by Title":
 
-    # All possible placement columns where names may appear
-    placement_cols = [
-        "World Champion",
-        "Second",
-        "Third",
-        "District Champion",
-        "State Champion"
-    ]
+        tab_names = list(all_titles.keys())
 
-    for title_name, title_df in all_titles.items():
+        selected_tab = st.selectbox(
+            "Select Title Sheet:",
+            tab_names
+        )
 
-        # Only search columns that actually exist in this sheet
-        existing_cols = [c for c in placement_cols if c in title_df.columns]
+        df = all_titles[selected_tab]
 
-        if not existing_cols:
-            continue
+        st.subheader(f"Viewing: {selected_tab}")
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-        # Build a mask: competitor appears in ANY placement column
-        mask = False
-        for col in existing_cols:
-            mask = mask | title_df[col].astype(str).str.contains(
-                search_name, case=False, na=False
-            )
-
-        matches = title_df[mask].copy()
-
-        if not matches.empty:
-            matches["Title Sheet"] = title_name
-            results.append(matches)
-
-    if results:
-        combined = pd.concat(results, ignore_index=True)
-        st.success(f"Found {len(combined)} matching results")
-        st.dataframe(combined, use_container_width=True, hide_index=True)
+    # ---------------------------------------
+    # 2. SEARCH BY COMPETITOR (enhanced)
+    # ---------------------------------------
     else:
-        st.warning("No results found for that competitor.")
-        
+        st.subheader("Search Competitor Across All Titles")
+
+        search_name = st.text_input("Enter competitor name")
+
+        if search_name:
+            results = []
+
+            # All possible placement columns where names may appear
+            placement_cols = [
+                "World Champion",
+                "Second",
+                "Third",
+                "District Champion",
+                "State Champion"
+            ]
+
+            for sheet_name, title_df in all_titles.items():
+
+                # Only search columns that exist in this sheet
+                existing_cols = [c for c in placement_cols if c in title_df.columns]
+                if not existing_cols:
+                    continue
+
+                # Build mask: competitor appears in ANY placement column
+                mask = False
+                for col in existing_cols:
+                    mask = mask | title_df[col].astype(str).str.contains(
+                        search_name, case=False, na=False
+                    )
+
+                matches = title_df[mask].copy()
+                if matches.empty:
+                    continue
+
+                # Remove placement columns where they did NOT place
+                for col in placement_cols:
+                    if col in matches.columns:
+                        matches = matches[matches[col].notna() & (matches[col] != "")]
+
+                if matches.empty:
+                    continue
+
+                # --- Extract Year + Title from sheet name ---
+                # Example: "23-24 GA State Title 50-59 Color Belt"
+                parts = sheet_name.split(" ", 1)
+
+                if len(parts) == 2:
+                    year_raw, title_raw = parts
+                else:
+                    year_raw = sheet_name
+                    title_raw = ""
+
+                # Convert "23-24" → "2023–2024"
+                if "-" in year_raw and len(year_raw) == 5:
+                    start, end = year_raw.split("-")
+                    year = f"20{start}–20{end}"
+                else:
+                    year = year_raw
+
+                matches["Year"] = year
+                matches["Title"] = title_raw
+
+                results.append(matches)
+
+            if results:
+                combined = pd.concat(results, ignore_index=True)
+
+                # Reorder columns: Year, Title, then everything else
+                ordered_cols = ["Year", "Title"] + [
+                    c for c in combined.columns
+                    if c not in ["Year", "Title"]
+                ]
+                combined = combined[ordered_cols]
+
+                st.success(f"Found {len(combined)} placements for '{search_name}'")
+                st.dataframe(combined, use_container_width=True, hide_index=True)
+            else:
+                st.warning("No results found for that competitor.")     
