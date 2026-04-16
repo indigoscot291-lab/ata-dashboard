@@ -134,74 +134,94 @@ def fetch_html_v2(url: str):
         return None
     return None
 
-### Start debug
-import streamlit as st
-import requests
-from bs4 import BeautifulSoup
+# New parse for District and Worlds 
+def parse_multi_event_standings(html: str):
+    """
+    NEW multi-event ATA parser.
+    Does NOT replace your existing parse_standings().
+    Reads ALL event tables using the new ATA <h3> + <table> structure.
 
-def debug_multi_event_b01e_suwanee():
-    url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E"
-    st.write("🔍 Debugging ALL events for B01E (Suwanee, GA)")
-    st.write("URL:", url)
+    Returns:
+    {
+        "Forms": [...],
+        "Weapons": [...],
+        "Combat Weapons": [...],
+        "Sparring": [...],
+        "Creative Forms": [...],
+        "Creative Weapons": [...],
+        "X-Treme Forms": [...],
+        "X-Treme Weapons": [...]
+    }
+    """
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/123.0.0.0 Safari/537.36"
-        )
+    soup = BeautifulSoup(html, "html.parser")
+
+    # The exact event names ATA uses
+    EVENT_MAP = {
+        "Forms": "Forms",
+        "Weapons": "Weapons",
+        "Combat Weapons": "Combat Weapons",
+        "Sparring": "Sparring",
+        "Creative Forms": "Creative Forms",
+        "Creative Weapons": "Creative Weapons",
+        "X-Treme Forms": "X-Treme Forms",
+        "X-Treme Weapons": "X-Treme Weapons",
     }
 
-    # Fetch HTML
-    r = requests.get(url, headers=headers)
-    st.write("Status:", r.status_code)
-    st.write("HTML length:", len(r.text))
+    # Output structure: only events that appear on the page
+    results = {ev: [] for ev in EVENT_MAP.values()}
 
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    # Find ALL tables (each event has its own table)
+    # ATA uses <h3> for event headers
+    headers = soup.find_all("h3")
     tables = soup.find_all("table")
-    st.write("Total event tables found:", len(tables))
 
-    # Loop through each event table
-    for i, table in enumerate(tables):
-        # Try to find the event name above the table
-        event_header = table.find_previous("h3")
-        event_name = event_header.get_text(strip=True) if event_header else f"Event {i+1}"
+    # Pair each <h3> with the table immediately following it
+    for header, table in zip(headers, tables):
+        event_name = header.get_text(strip=True)
 
-        st.write(f"### 📌 Event {i+1}: {event_name}")
+        # Only process events we recognize
+        if event_name not in EVENT_MAP:
+            continue
 
         tbody = table.find("tbody")
         if not tbody:
-            st.warning("⚠️ No <tbody> found for this event")
             continue
 
-        rows = tbody.find_all("tr")
-        st.write(f"Rows in this event: {len(rows)}")
+        event_rows = []
 
-        # Show all rows for this event
-        st.write("📄 All rows:")
-        parsed_rows = []
-        for row in rows:
-            cols = [c.get_text(strip=True) for c in row.find_all("td")]
-            if cols:
-                parsed_rows.append(cols)
-                st.write(cols)
+        for tr in tbody.find_all("tr"):
+            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
 
-        # Filter for Suwanee, GA
-        st.write("📍 Rows matching Suwanee, GA:")
-        suwanee_rows = []
-        for cols in parsed_rows:
-            if len(cols) == 4 and "SUWANEE" in cols[3].upper():
-                suwanee_rows.append(cols)
-                st.success(cols)
+            # Expecting: Rank, Name, Points, Location
+            if len(cols) != 4:
+                continue
 
-        if not suwanee_rows:
-            st.info("ℹ️ No Suwanee competitors in this event")
+            rank_s, name, pts_s, loc = cols
 
-debug_multi_event_b01e_suwanee()
+            # Validate points
+            try:
+                pts_val = int(pts_s)
+            except:
+                continue
 
-####end debug
+            if pts_val <= 0:
+                continue
+
+            event_rows.append({
+                "Rank": int(rank_s),
+                "Name": name.strip(),
+                "Points": pts_val,
+                "Location": loc.strip()
+            })
+
+        # Only store events that have rows
+        if event_rows:
+            results[event_name] = event_rows
+
+    return results
+
+
+
 import requests
 from bs4 import BeautifulSoup
 import unicodedata
@@ -1174,7 +1194,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 continue
 
             # Parse + rank
-            parsed = parse_standings(html)
+            parsed = parse_multi_event_standings(html)
             ranked = dedupe_and_rank(parsed)
 
             # Process rows
