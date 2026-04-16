@@ -1180,9 +1180,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
     go = st.button("Go", key="go_button_all_divisions")
 
-    # -------------------------
-    # THIS PART WAS MISSING
-    # -------------------------
     if go:
         st.info("Pulling ATA standings for all Matrix divisions…")
 
@@ -1198,8 +1195,15 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 url = div_info["state_url_template"].format(country, state_abbrev, code)
 
-            # Fetch + parse HTML
+            # Fetch HTML
             html = fetch_html(url)
+
+            # ✅ Guard: make sure html is a string before parsing
+            if not isinstance(html, str) or not html.strip():
+                st.warning(f"Skipping {div_name} — invalid HTML returned for URL: {url}")
+                continue
+
+            # Parse + rank
             parsed = parse_standings(html)
             ranked = dedupe_and_rank(parsed)
 
@@ -1266,5 +1270,4 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             df = df.sort_values(["Division", "Event", "Rank", "Name"])
             st.success(f"Found {len(df)} qualifiers.")
             st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
-
-
+                
