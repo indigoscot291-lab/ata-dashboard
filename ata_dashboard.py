@@ -234,6 +234,7 @@ page_choice = st.selectbox(
         "1st Degree Black Belt Women 50-59",
         "National & District Rings",
         "Historical Titles"
+        "State & World Qualifiers (All Divisions)"
 #        "Competitor Search"
     ]
 )
@@ -974,4 +975,102 @@ elif page_choice == "Historical Titles":
                 st.dataframe(combined, use_container_width=True, hide_index=True)
             else:
                 st.warning("No results found for that competitor.")
+# --- PAGE X: State Qualifiers (All Divisions) ---
+elif page_choice == "State & World Qualifiers (All Divisions)":
+    st.title("State & World Qualifiers — All Divisions")
+
+    # --- User Inputs ---
+    state_choice = st.selectbox("Select State:", sorted(REGION_CODES.keys()))
+    qualifier_type = st.radio(
+        "Select Qualifier Type:",
+        ["District Qualifiers (Top 10 State)", "World Qualifiers (Top 10 World)"]
+    )
+
+    st.write("### Town Filter (Optional)")
+    town_dropdown = st.selectbox("Select Town (from scraped data):", ["(All Towns)"])
+    town_text = st.text_input("Or type a town name:")
+
+    go = st.button("Go")
+
+    if go:
+        st.info("Scraping ATA standings for all divisions… this may take a moment.")
+
+        results = []
+
+        # Loop through ALL divisions in GROUPS
+        for div_name, div_info in GROUPS.items():
+            code = div_info["code"]
+
+            # --- Build URL based on qualifier type ---
+            if "District" in qualifier_type:
+                # Only selected state
+                country, state_abbrev = REGION_CODES[state_choice]
+                url = div_info["state_url_template"].format(country, state_abbrev, code)
+            else:
+                # World standings
+                url = div_info["world_url"]
+
+            html = fetch_html(url)
+            if not html:
+                continue
+
+            parsed = parse_standings(html)
+            ranked = dedupe_and_rank(parsed)
+
+            # --- Process each event ---
+            for event_name, entries in ranked.items():
+                for e in entries:
+                    # Extract Town + State
+                    loc = e["Location"]
+                    if "," in loc:
+                        town, st = loc.split(",", 1)
+                        town = town.strip()
+                        st = st.strip()
+                    else:
+                        town = loc.strip()
+                        st = ""
+
+                    # --- Filter by selected state ---
+                    if st != REGION_CODES[state_choice][1]:
+                        continue
+
+                    # --- Town filter ---
+                    if town_text:
+                        if town_text.lower() not in town.lower():
+                            continue
+                    elif town_dropdown != "(All Towns)":
+                        if town_dropdown.lower() != town.lower():
+                            continue
+
+                    # --- Top 10 filter ---
+                    if e["Rank"] > 10:
+                        continue
+
+                    results.append({
+                        "Name": e["Name"],
+                        "Town": town,
+                        "State": st,
+                        "Event": event_name,
+                        "Rank": e["Rank"],
+                        "Points": e["Points"],
+                        "Division": div_name
+                    })
+
+        # --- Build Town Dropdown AFTER scraping ---
+        if results:
+            towns = sorted(set(r["Town"] for r in results))
+            st.session_state["town_list"] = towns
+            st.write("### Available Towns in This State:")
+            st.write(", ".join(towns))
+
+        # --- Display Results ---
+        if not results:
+            st.warning("No qualifiers found for the selected filters.")
+        else:
+            df = pd.DataFrame(results)
+            df = df.sort_values(["Division", "Event", "Rank", "Name"])
+
+            st.success(f"Found {len(df)} qualifiers.")
+            st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
+                
 
