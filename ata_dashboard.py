@@ -122,14 +122,18 @@ def fetch_html_v2(url: str):
             "Chrome/123.0.0.0 Safari/537.36"
         ),
         "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://atamartialarts.com/",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
     }
     try:
-        r = requests.get(url, headers=headers, timeout=12)
-        if r.status_code == 200:
+        r = requests.get(url, headers=headers, timeout=15)
+        if r.status_code == 200 and len(r.text) > 5000:
             return r.text
     except:
         return None
     return None
+
 
 
 import requests
