@@ -70,6 +70,30 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
+#Defining Matrix for District and World Qualifiers here
+MATRIX_SHEET_URL_V2 = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv&gid=0"
+
+@st.cache_data(ttl=3600)
+def load_matrix_groups_v2():
+    try:
+        df = pd.read_csv(MATRIX_SHEET_URL_V2)
+
+        groups = {}
+        for _, row in df.iterrows():
+            div_name = row["Division"]
+            groups[div_name] = {
+                "code": row["Code"],
+                "world_url": row["WorldURL"],
+                "state_url_template": row["StateURLTemplate"]
+            }
+
+        return groups
+
+    except Exception:
+        return {}
+
+MATRIX_GROUPS = load_matrix_groups_v2()
+
 import requests
 from bs4 import BeautifulSoup
 import unicodedata
@@ -984,7 +1008,7 @@ elif page_choice == "Historical Titles":
                 st.warning("No results found for that competitor.")
 # --- PAGE X: State Qualifiers (All Divisions) ---
 elif page_choice == "State & World Qualifiers (All Divisions)":
-    st.title("State & World Qualifiers — All Divisions")
+    st.title("State & World Qualifiers — All Divisions")    
 
     if "town_list" not in st.session_state:
         st.session_state["town_list"] = ["(All Towns)"]
