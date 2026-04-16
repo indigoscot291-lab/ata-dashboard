@@ -248,6 +248,18 @@ def load_all_title_tabs(sheet_id: str, tabs: dict):
 
 SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
+all_tabs = {}
+
+    for title, gid in tabs.items():
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+        try:
+            df = pd.read_csv(csv_url)
+            all_tabs[title] = df
+        except Exception as e:
+            print(f"Failed to load sheet {title} (gid={gid}): {e}")
+
+    return all_tabs
+
 TITLE_TABS = {
     "23-24 GA State Title 50-59 Color Belt": 1450148970,
     "24-25 GA State Title 50-59 Color Belt": 0,
