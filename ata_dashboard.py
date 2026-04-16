@@ -257,6 +257,7 @@ for title, gid in tabs.items():
         all_tabs[title] = df
     except Exception as e:
         print(f"Failed to load sheet {title} (gid={gid}): {e}")
+        
 return all_tabs
 
 TITLE_TABS = {
