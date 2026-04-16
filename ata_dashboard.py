@@ -979,15 +979,23 @@ elif page_choice == "Historical Titles":
 elif page_choice == "State & World Qualifiers (All Divisions)":
     st.title("State & World Qualifiers — All Divisions")
 
+    # Ensure session_state key exists BEFORE widgets use it
+    if "town_list" not in st.session_state:
+        st.session_state["town_list"] = ["(All Towns)"]
+
     # --- User Inputs ---
     state_choice = st.selectbox("Select State:", sorted(REGION_CODES.keys()))
+
     qualifier_type = st.radio(
         "Select Qualifier Type:",
         ["District Qualifiers (Top 10 State)", "World Qualifiers (Top 10 World)"]
     )
 
     st.write("### Town Filter (Optional)")
-    town_dropdown = st.selectbox("Select Town (from scraped data):", ["(All Towns)"])
+    town_dropdown = st.selectbox(
+        "Select Town (from scraped data):",
+        st.session_state["town_list"]
+    )
     town_text = st.text_input("Or type a town name:")
 
     go = st.button("Go")
@@ -1020,18 +1028,17 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             # --- Process each event ---
             for event_name, entries in ranked.items():
                 for e in entries:
-                    # Extract Town + State
                     loc = e["Location"]
                     if "," in loc:
-                        town, st = loc.split(",", 1)
+                        town, st_abbrev = loc.split(",", 1)
                         town = town.strip()
-                        st = st.strip()
+                        st_abbrev = st_abbrev.strip()
                     else:
                         town = loc.strip()
-                        st = ""
+                        st_abbrev = ""
 
                     # --- Filter by selected state ---
-                    if st != REGION_CODES[state_choice][1]:
+                    if st_abbrev != REGION_CODES[state_choice][1]:
                         continue
 
                     # --- Town filter ---
@@ -1049,17 +1056,17 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     results.append({
                         "Name": e["Name"],
                         "Town": town,
-                        "State": st,
+                        "State": st_abbrev,
                         "Event": event_name,
                         "Rank": e["Rank"],
                         "Points": e["Points"],
                         "Division": div_name
                     })
 
-        # --- Build Town Dropdown AFTER scraping ---
+        # --- Update Town List AFTER scraping ---
         if results:
             towns = sorted(set(r["Town"] for r in results))
-            st.session_state["town_list"] = towns
+            st.session_state["town_list"] = ["(All Towns)"] + towns
             st.write("### Available Towns in This State:")
             st.write(", ".join(towns))
 
@@ -1072,5 +1079,5 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             st.success(f"Found {len(df)} qualifiers.")
             st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
-                
+    
 
