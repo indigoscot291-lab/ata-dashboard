@@ -983,6 +983,10 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
     if "town_list" not in st.session_state:
         st.session_state["town_list"] = ["(All Towns)"]
 
+    if not MATRIX_GROUPS:
+        st.error("No divisions loaded from the Matrix spreadsheet.")
+        st.stop()
+
     # --- User Inputs ---
     state_choice = st.selectbox("Select State:", sorted(REGION_CODES.keys()))
 
@@ -1001,18 +1005,18 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
     go = st.button("Go")
 
     if go:
-        st.info("Scraping ATA standings for all divisions… this may take a moment.")
+        st.info("Scraping ATA standings for all Matrix divisions… this may take a moment.")
 
         results = []
+        country, state_abbrev = REGION_CODES[state_choice]
 
-        # Loop through ALL divisions in GROUPS
-        for div_name, div_info in GROUPS.items():
+        # Loop through ALL divisions from the Matrix
+        for div_name, div_info in MATRIX_GROUPS.items():
             code = div_info["code"]
 
             # --- Build URL based on qualifier type ---
             if "District" in qualifier_type:
                 # Only selected state
-                country, state_abbrev = REGION_CODES[state_choice]
                 url = div_info["state_url_template"].format(country, state_abbrev, code)
             else:
                 # World standings
@@ -1038,7 +1042,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         st_abbrev = ""
 
                     # --- Filter by selected state ---
-                    if st_abbrev != REGION_CODES[state_choice][1]:
+                    if st_abbrev != state_abbrev:
                         continue
 
                     # --- Town filter ---
@@ -1060,14 +1064,15 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         "Event": event_name,
                         "Rank": e["Rank"],
                         "Points": e["Points"],
-                        "Division": div_name
+                        "Division": div_name,
+                        "Code": code
                     })
 
         # --- Update Town List AFTER scraping ---
         if results:
             towns = sorted(set(r["Town"] for r in results))
             st.session_state["town_list"] = ["(All Towns)"] + towns
-            st.write("### Available Towns in This State:")
+            st.write("### Available Towns in This State (from qualifiers):")
             st.write(", ".join(towns))
 
         # --- Display Results ---
@@ -1080,4 +1085,4 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             st.success(f"Found {len(df)} qualifiers.")
             st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
     
-
+    
