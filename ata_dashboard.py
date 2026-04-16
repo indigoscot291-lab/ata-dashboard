@@ -134,44 +134,69 @@ def fetch_html_v2(url: str):
         return None
     return None
 
+### Start debug
 import streamlit as st
 import requests
+from bs4 import BeautifulSoup
 
-def debug_fetch(url):
-    st.write("🔍 Debugging fetch for:", url)
+def debug_b01e_suwanee():
+    url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E"
+    st.write("🔍 Debugging B01E for Suwanee, GA")
+    st.write("URL:", url)
 
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/123.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://atamartialarts.com/",
+        )
     }
 
-    try:
-        r = requests.get(url, headers=headers, timeout=15)
-        st.write("Status code:", r.status_code)
-        st.write("Final URL:", r.url)
-        st.write("HTML length:", len(r.text))
+    # Fetch HTML
+    r = requests.get(url, headers=headers)
+    st.write("Status:", r.status_code)
+    st.write("HTML length:", len(r.text))
 
-        # Show first 2000 chars
-        preview = r.text[:2000]
-        st.code(preview)
+    # Show first 1500 chars
+    st.code(r.text[:1500])
 
-        # Quick structure check
-        st.write("Contains <table>:", "<table" in r.text.lower())
-        st.write("Contains tournament-row:", "tournament-row" in r.text.lower())
-        st.write("Contains tournament-header:", "tournament-header" in r.text.lower())
+    # Parse HTML
+    soup = BeautifulSoup(r.text, "html.parser")
 
-    except Exception as e:
-        st.error(f"Error: {e}")
+    # Extract table
+    table = soup.find("table")
+    if not table:
+        st.error("❌ No <table> found")
+        return
 
-# Run the debug
-debug_fetch("https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E")
+    tbody = table.find("tbody")
+    if not tbody:
+        st.error("❌ No <tbody> found")
+        return
 
+    rows = tbody.find_all("tr")
+    st.write("Total rows found:", len(rows))
 
+    # Show all parsed rows
+    st.write("📄 All parsed rows:")
+    for row in rows:
+        cols = [c.get_text(strip=True) for c in row.find_all("td")]
+        st.write(cols)
+
+    # Filter for Suwanee, GA
+    st.write("📍 Rows matching Suwanee, GA:")
+    suwanee_rows = []
+    for row in rows:
+        cols = [c.get_text(strip=True) for c in row.find_all("td")]
+        if len(cols) == 4 and "SUWANEE" in cols[3].upper():
+            suwanee_rows.append(cols)
+            st.success(cols)
+
+    if not suwanee_rows:
+        st.warning("⚠️ No rows found for Suwanee, GA")
+
+debug_b01e_suwanee()
+####end debug
 import requests
 from bs4 import BeautifulSoup
 import unicodedata
