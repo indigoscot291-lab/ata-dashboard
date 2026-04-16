@@ -134,14 +134,43 @@ def fetch_html_v2(url: str):
         return None
     return None
 
-test_url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
-html = fetch_html_v2(test_url)
+import streamlit as st
+import requests
 
-if html:
-    st.write("HTML length:", len(html))
-    st.code(html[:1000])
-else:
-    st.write("No HTML returned")
+def debug_fetch(url):
+    st.write("🔍 Debugging fetch for:", url)
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/123.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://atamartialarts.com/",
+    }
+
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        st.write("Status code:", r.status_code)
+        st.write("Final URL:", r.url)
+        st.write("HTML length:", len(r.text))
+
+        # Show first 2000 chars
+        preview = r.text[:2000]
+        st.code(preview)
+
+        # Quick structure check
+        st.write("Contains <table>:", "<table" in r.text.lower())
+        st.write("Contains tournament-row:", "tournament-row" in r.text.lower())
+        st.write("Contains tournament-header:", "tournament-header" in r.text.lower())
+
+    except Exception as e:
+        st.error(f"Error: {e}")
+
+# Run the debug
+debug_fetch("https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E")
+
 
 import requests
 from bs4 import BeautifulSoup
