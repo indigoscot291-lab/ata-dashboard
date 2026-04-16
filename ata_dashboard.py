@@ -136,17 +136,8 @@ def fetch_html_v2(url: str):
 
 # New parse for District and Worlds 
 def parse_multi_event_standings(html: str):
-    """
-    NEW multi-event ATA parser using the REAL HTML structure:
-    <ul class="tournament-header">
-        <li><span class="text-primary text-uppercase">EVENT NAME</span></li>
-    </ul>
-    <table>...</table>
-    """
-
     soup = BeautifulSoup(html, "html.parser")
 
-    # The exact event names ATA uses
     EVENT_MAP = {
         "Forms": "Forms",
         "Weapons": "Weapons",
@@ -160,34 +151,33 @@ def parse_multi_event_standings(html: str):
 
     results = {ev: [] for ev in EVENT_MAP.values()}
 
-    # Find ALL tournament headers
+    # Find all event headers
     headers = soup.find_all("ul", class_="tournament-header")
-    tables = soup.find_all("table")
 
-    # Pair each header with its table
-    for header, table in zip(headers, tables):
-
-        # Extract event name from the FIRST <li><span>
+    for header in headers:
+        # Extract event name
         span = header.find("span", class_="text-primary text-uppercase")
         if not span:
             continue
 
         event_name = span.get_text(strip=True)
 
-        # Only process events we recognize
         if event_name not in EVENT_MAP:
+            continue
+
+        # Find the NEXT table after this header
+        table = header.find_next("table")
+        if not table:
             continue
 
         tbody = table.find("tbody")
         if not tbody:
             continue
 
-        event_rows = []
+        rows = []
 
         for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
-
-            # Expecting: Place, Name, Pts, Location
             if len(cols) != 4:
                 continue
 
@@ -198,18 +188,15 @@ def parse_multi_event_standings(html: str):
             except:
                 continue
 
-            if pts_val <= 0:
-                continue
-
-            event_rows.append({
+            rows.append({
                 "Rank": int(place_s),
                 "Name": name.strip(),
                 "Points": pts_val,
                 "Location": loc.strip()
             })
 
-        if event_rows:
-            results[event_name] = event_rows
+        if rows:
+            results[event_name] = rows
 
     return results
 
