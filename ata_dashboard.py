@@ -233,7 +233,7 @@ page_choice = st.selectbox(
         "ATA Standings Dashboard",
         "1st Degree Black Belt Women 50-59",
         "National & District Rings",
-        "Historical Titles"
+        "Historical Titles",
         "State & World Qualifiers (All Divisions)"
 #        "Competitor Search"
     ]
