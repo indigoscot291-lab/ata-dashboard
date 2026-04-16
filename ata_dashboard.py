@@ -242,7 +242,9 @@ REGION_CODES = {
     "Georgia": ("US", "GA"),
 }
 
-
+@st.cache_data(ttl=3600)
+def load_all_title_tabs(sheet_id: str, tabs: dict):
+    import pandas as pd
 
 SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
