@@ -71,7 +71,11 @@ DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heK
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
 #Defining Matrix for District and World Qualifiers here
-MATRIX_SHEET_URL_V2 = "https://docs.google.com/spreadsheets/d/1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv&gid=0"
+MATRIX_SHEET_URL_V2 = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/"
+    "export?format=csv&gid=0"
+)
 
 @st.cache_data(ttl=3600)
 def load_matrix_groups_v2():
@@ -79,12 +83,26 @@ def load_matrix_groups_v2():
         df = pd.read_csv(MATRIX_SHEET_URL_V2)
 
         groups = {}
+
         for _, row in df.iterrows():
-            div_name = row["Division"]
+            div_name = str(row["Age Group"]).strip()
+            code = str(row["Code"]).strip()
+
+            # Build URLs using the formats YOU confirmed
+            world_url = (
+                "https://atamartialarts.com/events/tournament-standings/"
+                f"worlds-standings/?code={code}"
+            )
+
+            state_url_template = (
+                "https://atamartialarts.com/events/tournament-standings/"
+                "state-standings/?country={}&state={}&code=" + code
+            )
+
             groups[div_name] = {
-                "code": row["Code"],
-                "world_url": row["WorldURL"],
-                "state_url_template": row["StateURLTemplate"]
+                "code": code,
+                "world_url": world_url,
+                "state_url_template": state_url_template
             }
 
         return groups
