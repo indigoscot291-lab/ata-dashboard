@@ -237,11 +237,6 @@ def load_matrix_groups():
 
 MATRIX_GROUPS = load_matrix_groups()
 
-# Example region mapping
-REGION_CODES = {
-    "Georgia": ("US", "GA"),
-}
-
 @st.cache_data(ttl=3600)
 def load_all_title_tabs(sheet_id: str, tabs: dict):
     import pandas as pd
@@ -1184,7 +1179,92 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
     )
 
     go = st.button("Go", key="go_button_all_divisions")
-                
 
+    # -------------------------
+    # THIS PART WAS MISSING
+    # -------------------------
+    if go:
+        st.info("Pulling ATA standings for all Matrix divisions…")
+
+        results = []
+        country, state_abbrev = REGION_CODES[state_choice]
+
+        for div_name, div_info in MATRIX_GROUPS.items():
+            code = div_info["code"]
+
+            # Build correct URL
+            if "World" in qualifier_type:
+                url = div_info["world_url"]
+            else:
+                url = div_info["state_url_template"].format(country, state_abbrev, code)
+
+            # Fetch + parse HTML
+            html = fetch_html(url)
+            parsed = parse_standings(html)
+            ranked = dedupe_and_rank(parsed)
+
+            # Process rows
+            for event_name, entries in ranked.items():
+                for e in entries:
+                    loc = e["Location"].strip()
+                    loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+
+                    if "," in loc_norm:
+                        town, st_abbrev2 = loc_norm.split(",", 1)
+                    else:
+                        parts = loc_norm.split()
+                        if len(parts) > 1:
+                            town = " ".join(parts[:-1])
+                            st_abbrev2 = parts[-1]
+                        else:
+                            town = loc_norm
+                            st_abbrev2 = ""
+
+                    town = town.strip()
+                    st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
+
+                    # State filter (only for District)
+                    if "District" in qualifier_type:
+                        if st_abbrev2 != state_abbrev.upper():
+                            continue
+
+                    # Town filters
+                    if town_text:
+                        if town_text.lower() not in town.lower():
+                            continue
+                    elif town_dropdown != "(All Towns)":
+                        if town_dropdown.lower() != town.lower():
+                            continue
+
+                    # Top 10 only
+                    if e["Rank"] > 10:
+                        continue
+
+                    results.append({
+                        "Name": e["Name"],
+                        "Town": town,
+                        "State": st_abbrev2,
+                        "Event": event_name,
+                        "Rank": e["Rank"],
+                        "Points": e["Points"],
+                        "Division": div_name,
+                        "Code": code,
+                    })
+
+        # Update town list
+        if results:
+            towns = sorted(set(r["Town"] for r in results))
+            st.session_state["town_list"] = ["(All Towns)"] + towns
+            st.write("### Available Towns in This State (from qualifiers):")
+            st.write(", ".join(towns))
+
+        # Output
+        if not results:
+            st.warning("No qualifiers found for the selected filters.")
+        else:
+            df = pd.DataFrame(results)
+            df = df.sort_values(["Division", "Event", "Rank", "Name"])
+            st.success(f"Found {len(df)} qualifiers.")
+            st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
 
 
