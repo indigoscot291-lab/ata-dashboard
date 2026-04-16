@@ -134,7 +134,7 @@ def fetch_html_v2(url: str):
         return None
     return None
 
-test_url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E"
+test_url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D"
 html = fetch_html_v2(test_url)
 
 if html:
