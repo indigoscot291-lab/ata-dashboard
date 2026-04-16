@@ -6,16 +6,6 @@ import re
 import io
 import concurrent.futures
 
-test_url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E"
-html = fetch_html_v2(test_url)
-
-if html:
-    st.write("HTML length:", len(html))
-    st.code(html[:1000])
-else:
-    st.write("No HTML returned")
-
-
 # Page config
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
 
@@ -144,7 +134,14 @@ def fetch_html_v2(url: str):
         return None
     return None
 
+test_url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E"
+html = fetch_html_v2(test_url)
 
+if html:
+    st.write("HTML length:", len(html))
+    st.code(html[:1000])
+else:
+    st.write("No HTML returned")
 
 import requests
 from bs4 import BeautifulSoup
