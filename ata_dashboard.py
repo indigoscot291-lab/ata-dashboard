@@ -139,9 +139,9 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 
-def debug_b01e_suwanee():
+def debug_multi_event_b01e_suwanee():
     url = "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E"
-    st.write("🔍 Debugging B01E for Suwanee, GA")
+    st.write("🔍 Debugging ALL events for B01E (Suwanee, GA)")
     st.write("URL:", url)
 
     headers = {
@@ -157,45 +157,50 @@ def debug_b01e_suwanee():
     st.write("Status:", r.status_code)
     st.write("HTML length:", len(r.text))
 
-    # Show first 1500 chars
-    st.code(r.text[:1500])
-
-    # Parse HTML
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Extract table
-    table = soup.find("table")
-    if not table:
-        st.error("❌ No <table> found")
-        return
+    # Find ALL tables (each event has its own table)
+    tables = soup.find_all("table")
+    st.write("Total event tables found:", len(tables))
 
-    tbody = table.find("tbody")
-    if not tbody:
-        st.error("❌ No <tbody> found")
-        return
+    # Loop through each event table
+    for i, table in enumerate(tables):
+        # Try to find the event name above the table
+        event_header = table.find_previous("h3")
+        event_name = event_header.get_text(strip=True) if event_header else f"Event {i+1}"
 
-    rows = tbody.find_all("tr")
-    st.write("Total rows found:", len(rows))
+        st.write(f"### 📌 Event {i+1}: {event_name}")
 
-    # Show all parsed rows
-    st.write("📄 All parsed rows:")
-    for row in rows:
-        cols = [c.get_text(strip=True) for c in row.find_all("td")]
-        st.write(cols)
+        tbody = table.find("tbody")
+        if not tbody:
+            st.warning("⚠️ No <tbody> found for this event")
+            continue
 
-    # Filter for Suwanee, GA
-    st.write("📍 Rows matching Suwanee, GA:")
-    suwanee_rows = []
-    for row in rows:
-        cols = [c.get_text(strip=True) for c in row.find_all("td")]
-        if len(cols) == 4 and "SUWANEE" in cols[3].upper():
-            suwanee_rows.append(cols)
-            st.success(cols)
+        rows = tbody.find_all("tr")
+        st.write(f"Rows in this event: {len(rows)}")
 
-    if not suwanee_rows:
-        st.warning("⚠️ No rows found for Suwanee, GA")
+        # Show all rows for this event
+        st.write("📄 All rows:")
+        parsed_rows = []
+        for row in rows:
+            cols = [c.get_text(strip=True) for c in row.find_all("td")]
+            if cols:
+                parsed_rows.append(cols)
+                st.write(cols)
 
-debug_b01e_suwanee()
+        # Filter for Suwanee, GA
+        st.write("📍 Rows matching Suwanee, GA:")
+        suwanee_rows = []
+        for cols in parsed_rows:
+            if len(cols) == 4 and "SUWANEE" in cols[3].upper():
+                suwanee_rows.append(cols)
+                st.success(cols)
+
+        if not suwanee_rows:
+            st.info("ℹ️ No Suwanee competitors in this event")
+
+debug_multi_event_b01e_suwanee()
+
 ####end debug
 import requests
 from bs4 import BeautifulSoup
