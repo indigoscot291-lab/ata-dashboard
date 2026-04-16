@@ -70,6 +70,58 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
+# --- MATRIX: ALL DIVISIONS ---
+MATRIX_SHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv&gid=0"
+)
+
+@st.cache_data(ttl=3600)
+def load_matrix_groups():
+    """
+    Loads the Matrix spreadsheet and builds a dynamic division dictionary.
+
+    Assumes columns:
+      - 'Age Group' (or similar) = human-readable division name, e.g. 'Color belt boys 8U'
+      - 'Code' = ATA division code, e.g. 'BCOA'
+    """
+    try:
+        df = pd.read_csv(MATRIX_SHEET_URL)
+    except Exception as e:
+        st.error(f"Failed to load Matrix spreadsheet: {e}")
+        return {}
+
+    # Try to be robust about column names
+    cols = [c.strip().lower() for c in df.columns]
+    try:
+        name_col = df.columns[cols.index("age group")]
+    except ValueError:
+        # Fallback: first column
+        name_col = df.columns[0]
+
+    try:
+        code_col = df.columns[cols.index("code")]
+    except ValueError:
+        # Fallback: second column
+        code_col = df.columns[1]
+
+    groups = {}
+    for _, row in df.iterrows():
+        div_name = str(row[name_col]).strip()
+        code = str(row[code_col]).strip()
+        if not div_name or not code:
+            continue
+
+        groups[div_name] = {
+            "code": code,
+            "world_url": f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={code}",
+            "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}"
+        }
+
+    return groups
+
+MATRIX_GROUPS = load_matrix_groups()
+
 @st.cache_data(ttl=3600)
 def load_all_title_tabs(sheet_id: str, tabs: dict):
     import pandas as pd
