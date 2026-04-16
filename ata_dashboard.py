@@ -169,7 +169,7 @@ def debug_fetch(url):
         st.error(f"Error: {e}")
 
 # Run the debug
-debug_fetch("https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D")
+debug_fetch("https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=B01E")
 
 
 import requests
