@@ -1175,7 +1175,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             # Parse + rank
             parsed = parse_multi_event_standings(html)
-            st.write("DEBUG PARSED:", {div_name}, parsed)
+            #st.write("DEBUG PARSED:", {div_name}, parsed)
             ranked = dedupe_and_rank(parsed)
 
             # Process rows
