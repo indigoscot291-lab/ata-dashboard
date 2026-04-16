@@ -252,11 +252,11 @@ all_tabs = {}
 
 for title, gid in tabs.items():
     csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-       try:
-           df = pd.read_csv(csv_url)
-           all_tabs[title] = df
-       except Exception as e:
-           print(f"Failed to load sheet {title} (gid={gid}): {e}")
+    try:
+        df = pd.read_csv(csv_url)
+        all_tabs[title] = df
+    except Exception as e:
+        print(f"Failed to load sheet {title} (gid={gid}): {e}")
 return all_tabs
 
 TITLE_TABS = {
