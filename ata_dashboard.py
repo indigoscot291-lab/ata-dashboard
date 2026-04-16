@@ -112,6 +112,26 @@ def load_matrix_groups_v2():
 
 MATRIX_GROUPS = load_matrix_groups_v2()
 
+# New fetch function only for District and World Qualifiers
+
+def fetch_html_v2(url: str):
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/123.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        r = requests.get(url, headers=headers, timeout=12)
+        if r.status_code == 200:
+            return r.text
+    except:
+        return None
+    return None
+
+
 import requests
 from bs4 import BeautifulSoup
 import unicodedata
@@ -1076,7 +1096,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 url = div_info["state_url_template"].format(country, state_abbrev, code)
 
             # Fetch HTML
-            html = fetch_html(url)
+            html = fetch_html_v2(url)
 
             # ✅ Guard: make sure html is a string before parsing
             if not isinstance(html, str) or not html.strip():
