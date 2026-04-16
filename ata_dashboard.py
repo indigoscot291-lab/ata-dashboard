@@ -137,21 +137,11 @@ def fetch_html_v2(url: str):
 # New parse for District and Worlds 
 def parse_multi_event_standings(html: str):
     """
-    NEW multi-event ATA parser.
-    Does NOT replace your existing parse_standings().
-    Reads ALL event tables using the new ATA <h3> + <table> structure.
-
-    Returns:
-    {
-        "Forms": [...],
-        "Weapons": [...],
-        "Combat Weapons": [...],
-        "Sparring": [...],
-        "Creative Forms": [...],
-        "Creative Weapons": [...],
-        "X-Treme Forms": [...],
-        "X-Treme Weapons": [...]
-    }
+    NEW multi-event ATA parser using the REAL HTML structure:
+    <ul class="tournament-header">
+        <li><span class="text-primary text-uppercase">EVENT NAME</span></li>
+    </ul>
+    <table>...</table>
     """
 
     soup = BeautifulSoup(html, "html.parser")
@@ -168,16 +158,21 @@ def parse_multi_event_standings(html: str):
         "X-Treme Weapons": "X-Treme Weapons",
     }
 
-    # Output structure: only events that appear on the page
     results = {ev: [] for ev in EVENT_MAP.values()}
 
-    # ATA uses <h3> for event headers
-    headers = soup.find_all("h3")
+    # Find ALL tournament headers
+    headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table")
 
-    # Pair each <h3> with the table immediately following it
+    # Pair each header with its table
     for header, table in zip(headers, tables):
-        event_name = header.get_text(strip=True)
+
+        # Extract event name from the FIRST <li><span>
+        span = header.find("span", class_="text-primary text-uppercase")
+        if not span:
+            continue
+
+        event_name = span.get_text(strip=True)
 
         # Only process events we recognize
         if event_name not in EVENT_MAP:
@@ -192,13 +187,12 @@ def parse_multi_event_standings(html: str):
         for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
 
-            # Expecting: Rank, Name, Points, Location
+            # Expecting: Place, Name, Pts, Location
             if len(cols) != 4:
                 continue
 
-            rank_s, name, pts_s, loc = cols
+            place_s, name, pts_s, loc = cols
 
-            # Validate points
             try:
                 pts_val = int(pts_s)
             except:
@@ -208,13 +202,12 @@ def parse_multi_event_standings(html: str):
                 continue
 
             event_rows.append({
-                "Rank": int(rank_s),
+                "Rank": int(place_s),
                 "Name": name.strip(),
                 "Points": pts_val,
                 "Location": loc.strip()
             })
 
-        # Only store events that have rows
         if event_rows:
             results[event_name] = event_rows
 
