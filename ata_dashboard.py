@@ -76,206 +76,6 @@ import unicodedata
 import pandas as pd
 import streamlit as st
 
-# -----------------------------
-# FETCH HTML (browser spoof + safe + cached)
-# -----------------------------
-@st.cache_data(ttl=3600)
-def fetch_html(url: str) -> str:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://atamartialarts.com/",
-        "DNT": "1",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-    }
-
-    try:
-        r = requests.get(url, headers=headers, timeout=15)
-        r.raise_for_status()
-        return r.text
-    except Exception:
-        # Always return a string so BeautifulSoup never gets None
-        return ""
-
-
-# -----------------------------
-# NORMALIZE NAMES
-# -----------------------------
-def normalize_name(name: str) -> str:
-    name = unicodedata.normalize("NFKC", str(name))
-    name = name.replace("\u200b", "").replace("\xa0", " ")
-    return name.strip()
-
-
-# -----------------------------
-# PARSE STANDINGS TABLE
-# -----------------------------
-def parse_standings(html: str):
-    soup = BeautifulSoup(html, "html.parser")
-    table = soup.find("table", class_="table")
-    results = {"Overall": []}
-
-    if not table:
-        return results
-
-    tbody = table.find("tbody")
-    if not tbody:
-        return results
-
-    for row in tbody.find_all("tr"):
-        cols = row.find_all("td")
-        if len(cols) < 4:
-            continue
-
-        try:
-            place = int(cols[0].get_text(strip=True))
-        except Exception:
-            continue
-
-        name = normalize_name(cols[1].get_text(strip=True))
-
-        try:
-            points = int(cols[2].get_text(strip=True))
-        except Exception:
-            points = 0
-
-        location = cols[3].get_text(strip=True)
-
-        results["Overall"].append(
-            {
-                "Rank": place,
-                "Name": name,
-                "Points": points,
-                "Location": location,
-            }
-        )
-
-    return results
-
-
-# -----------------------------
-# DEDUPE + RE-RANK
-# -----------------------------
-def dedupe_and_rank(parsed):
-    ranked = {}
-    for event_name, entries in parsed.items():
-        entries_sorted = sorted(
-            entries,
-            key=lambda e: (-e["Points"], e["Name"].lower()),
-        )
-
-        seen = {}
-        clean = []
-        for e in entries_sorted:
-            key = (e["Name"].lower(), e["Location"].lower())
-            if key in seen:
-                continue
-            seen[key] = True
-            clean.append(e)
-
-        for i, e in enumerate(clean, start=1):
-            e["Rank"] = i
-
-        ranked[event_name] = clean
-
-    return ranked
-
-
-# -----------------------------
-# MATRIX LOADER
-# -----------------------------
-MATRIX_SHEET_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv&gid=0"
-)
-
-@st.cache_data(ttl=3600)
-def load_matrix_groups():
-    try:
-        df = pd.read_csv(MATRIX_SHEET_URL)
-    except Exception as e:
-        st.error(f"Failed to load Matrix spreadsheet: {e}")
-        return {}
-
-    # Drop unnamed columns
-    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
-
-    normalized = {c: c.strip().lower() for c in df.columns}
-
-    # Find division/name column
-    name_col = None
-    for c in df.columns:
-        if normalized[c] in ["age group", "division", "division name", "name"]:
-            name_col = c
-            break
-    if name_col is None:
-        name_col = df.columns[0]
-
-    # Find code column
-    code_col = None
-    for c in df.columns:
-        if normalized[c] in ["code", "division code"]:
-            code_col = c
-            break
-    if code_col is None:
-        code_col = df.columns[-1]
-
-    groups = {}
-    for _, row in df.iterrows():
-        div_name = str(row[name_col]).strip()
-        code = str(row[code_col]).strip()
-        if not div_name or not code or code.lower() == "nan":
-            continue
-
-        groups[div_name] = {
-            "code": code,
-            "world_url": f"https://atamartialarts.com/events/tournament-standings/worlds-standings/?code={code}",
-            "state_url_template": (
-                "https://atamartialarts.com/events/tournament-standings/"
-                "state-standings/?country={}&state={}&code={}"
-            ),
-        }
-
-    return groups
-
-MATRIX_GROUPS = load_matrix_groups()
-
-
-@st.cache_data(ttl=3600)
-def load_all_title_tabs(sheet_id: str, tabs: dict):
-    all_tabs = {}
-
-    for title, gid in tabs.items():
-        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-        try:
-            df = pd.read_csv(csv_url)
-            all_tabs[title] = df
-        except Exception as e:
-            print(f"Failed to load sheet {title} (gid={gid}): {e}")
-
-    return all_tabs
-
-SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
-
-TITLE_TABS = {
-    "23-24 GA State Title 50-59 Color Belt": 1450148970,
-    "24-25 GA State Title 50-59 Color Belt": 0,
-    "24-25 FL State Title 50-59 Color Belt": 1239264195,
-    "24-25 SE District Title 50-59 Color Belt": 632203910,
-    "23-24 SE District Title 50-59 Color Belt": 1408227945,
-    "24-25 SE District Title 50-59 1st Degree Black Belt": 1588231489,
-    "24-25 World Title 50-59 1st Degree Black Belt": 250495899
-}
-
-all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
-tab_names = list(all_titles.keys()) 
-
 # --- HELPERS ---
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
@@ -298,36 +98,37 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-#def parse_standings(html: str):
- #   soup = BeautifulSoup(html, "html.parser")
-  # headers = soup.find_all("ul", class_="tournament-header")
-   # tables = soup.find_all("table")
-    #for header, table in zip(headers, tables):
-     #   evt = header.find("span", class_="text-primary text-uppercase")
-     #   if not evt:
-      #      continue
-       # ev_name = evt.get_text(strip=True)
-       # if ev_name not in EVENT_NAMES:
-        #    continue
-       # tbody = table.find("tbody")
-       # if not tbody:
-       #     continue
-       # for tr in tbody.find_all("tr"):
-        #    cols = [td.get_text(strip=True) for td in tr.find_all("td")]
-         #   if len(cols) == 4 and all(cols):
-          #      rank_s, name, pts_s, loc = cols
-           #     try:
-            #        pts_val = int(pts_s)
-             #   except:
-              #      continue
-              #  if pts_val > 0:
-               #     data[ev_name].append({
-                #        "Rank": int(rank_s),
-                 #       "Name": name.strip(),
-                  #      "Points": pts_val,
-                  #      "Location": loc.strip()
-                   # })
-   # return data
+def parse_standings(html: str):
+    soup = BeautifulSoup(html, "html.parser")
+    data = {ev: [] for ev in EVENT_NAMES}
+    headers = soup.find_all("ul", class_="tournament-header")
+    tables = soup.find_all("table")
+    for header, table in zip(headers, tables):
+        evt = header.find("span", class_="text-primary text-uppercase")
+        if not evt:
+            continue
+        ev_name = evt.get_text(strip=True)
+        if ev_name not in EVENT_NAMES:
+            continue
+        tbody = table.find("tbody")
+        if not tbody:
+            continue
+        for tr in tbody.find_all("tr"):
+            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
+            if len(cols) == 4 and all(cols):
+                rank_s, name, pts_s, loc = cols
+                try:
+                    pts_val = int(pts_s)
+                except:
+                    continue
+                if pts_val > 0:
+                    data[ev_name].append({
+                        "Rank": int(rank_s),
+                        "Name": name.strip(),
+                        "Points": pts_val,
+                        "Location": loc.strip()
+                    })
+    return data
 
 def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
@@ -375,31 +176,62 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     has_any = any(len(lst) > 0 for lst in combined.values())
     return combined, has_any
 
-#def dedupe_and_rank(event_data: dict):
- #   clean = {}
-  #  for ev, entries in event_data.items():
-   #     seen = set()
-    #    uniq = []
-     #   for e in entries:
-      #      key = (e["Name"].lower(), e["Location"], e["Points"])
-       #     if key not in seen:
-        #        seen.add(key)
-         #       uniq.append(e)
-        #uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        #prev_points = None
-       # prev_rank = None
-        #current_pos = 1
-        #for item in uniq:
-         #   if prev_points is None or item["Points"] != prev_points:
-          #      rank_to_assign = current_pos
-           #     item["Rank"] = rank_to_assign
-           #     prev_rank = rank_to_assign
-            #else:
-             #   item["Rank"] = prev_rank
-           # prev_points = item["Points"]
-           # current_pos += 1
-        #clean[ev] = uniq
-    #return clean
+def dedupe_and_rank(event_data: dict):
+    clean = {}
+    for ev, entries in event_data.items():
+        seen = set()
+        uniq = []
+        for e in entries:
+            key = (e["Name"].lower(), e["Location"], e["Points"])
+            if key not in seen:
+                seen.add(key)
+                uniq.append(e)
+        uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
+        prev_points = None
+        prev_rank = None
+        current_pos = 1
+        for item in uniq:
+            if prev_points is None or item["Points"] != prev_points:
+                rank_to_assign = current_pos
+                item["Rank"] = rank_to_assign
+                prev_rank = rank_to_assign
+            else:
+                item["Rank"] = prev_rank
+            prev_points = item["Points"]
+            current_pos += 1
+        clean[ev] = uniq
+    return clean
+
+
+@st.cache_data(ttl=3600)
+def load_all_title_tabs(sheet_id: str, tabs: dict):
+    all_tabs = {}
+
+    for title, gid in tabs.items():
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+        try:
+            df = pd.read_csv(csv_url)
+            all_tabs[title] = df
+        except Exception as e:
+            print(f"Failed to load sheet {title} (gid={gid}): {e}")
+
+    return all_tabs
+
+SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
+
+TITLE_TABS = {
+    "23-24 GA State Title 50-59 Color Belt": 1450148970,
+    "24-25 GA State Title 50-59 Color Belt": 0,
+    "24-25 FL State Title 50-59 Color Belt": 1239264195,
+    "24-25 SE District Title 50-59 Color Belt": 632203910,
+    "23-24 SE District Title 50-59 Color Belt": 1408227945,
+    "24-25 SE District Title 50-59 1st Degree Black Belt": 1588231489,
+    "24-25 World Title 50-59 1st Degree Black Belt": 250495899
+}
+
+all_titles = load_all_title_tabs(SHEET_ID, TITLE_TABS)
+tab_names = list(all_titles.keys()) 
+
 
 # --- PAGE SELECTION ---
 page_choice = st.selectbox(
