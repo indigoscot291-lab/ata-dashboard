@@ -77,9 +77,10 @@ import pandas as pd
 import streamlit as st
 
 # -----------------------------
-# FETCH HTML (browser spoof)
+# FETCH HTML (browser spoof + safe + cached)
 # -----------------------------
-def fetch_html(url):
+@st.cache_data(ttl=3600)
+def fetch_html(url: str) -> str:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -94,9 +95,13 @@ def fetch_html(url):
         "Upgrade-Insecure-Requests": "1",
     }
 
-    r = requests.get(url, headers=headers, timeout=15)
-    r.raise_for_status()
-    return r.text
+    try:
+        r = requests.get(url, headers=headers, timeout=15)
+        r.raise_for_status()
+        return r.text
+    except Exception:
+        # Always return a string so BeautifulSoup never gets None
+        return ""
 
 
 # -----------------------------
@@ -130,14 +135,14 @@ def parse_standings(html: str):
 
         try:
             place = int(cols[0].get_text(strip=True))
-        except:
+        except Exception:
             continue
 
         name = normalize_name(cols[1].get_text(strip=True))
 
         try:
             points = int(cols[2].get_text(strip=True))
-        except:
+        except Exception:
             points = 0
 
         location = cols[3].get_text(strip=True)
@@ -198,9 +203,12 @@ def load_matrix_groups():
         st.error(f"Failed to load Matrix spreadsheet: {e}")
         return {}
 
+    # Drop unnamed columns
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+
     normalized = {c: c.strip().lower() for c in df.columns}
 
+    # Find division/name column
     name_col = None
     for c in df.columns:
         if normalized[c] in ["age group", "division", "division name", "name"]:
@@ -209,6 +217,7 @@ def load_matrix_groups():
     if name_col is None:
         name_col = df.columns[0]
 
+    # Find code column
     code_col = None
     for c in df.columns:
         if normalized[c] in ["code", "division code"]:
@@ -237,10 +246,9 @@ def load_matrix_groups():
 
 MATRIX_GROUPS = load_matrix_groups()
 
+
 @st.cache_data(ttl=3600)
 def load_all_title_tabs(sheet_id: str, tabs: dict):
-    import pandas as pd
-
     all_tabs = {}
 
     for title, gid in tabs.items():
@@ -252,7 +260,6 @@ def load_all_title_tabs(sheet_id: str, tabs: dict):
             print(f"Failed to load sheet {title} (gid={gid}): {e}")
 
     return all_tabs
-
 
 SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
@@ -291,37 +298,36 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-def parse_standings(html: str):
-    soup = BeautifulSoup(html, "html.parser")
-    data = {ev: [] for ev in EVENT_NAMES}
-    headers = soup.find_all("ul", class_="tournament-header")
-    tables = soup.find_all("table")
-    for header, table in zip(headers, tables):
-        evt = header.find("span", class_="text-primary text-uppercase")
-        if not evt:
-            continue
-        ev_name = evt.get_text(strip=True)
-        if ev_name not in EVENT_NAMES:
-            continue
-        tbody = table.find("tbody")
-        if not tbody:
-            continue
-        for tr in tbody.find_all("tr"):
-            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
-            if len(cols) == 4 and all(cols):
-                rank_s, name, pts_s, loc = cols
-                try:
-                    pts_val = int(pts_s)
-                except:
-                    continue
-                if pts_val > 0:
-                    data[ev_name].append({
-                        "Rank": int(rank_s),
-                        "Name": name.strip(),
-                        "Points": pts_val,
-                        "Location": loc.strip()
-                    })
-    return data
+#def parse_standings(html: str):
+ #   soup = BeautifulSoup(html, "html.parser")
+  # headers = soup.find_all("ul", class_="tournament-header")
+   # tables = soup.find_all("table")
+    #for header, table in zip(headers, tables):
+     #   evt = header.find("span", class_="text-primary text-uppercase")
+     #   if not evt:
+      #      continue
+       # ev_name = evt.get_text(strip=True)
+       # if ev_name not in EVENT_NAMES:
+        #    continue
+       # tbody = table.find("tbody")
+       # if not tbody:
+       #     continue
+       # for tr in tbody.find_all("tr"):
+        #    cols = [td.get_text(strip=True) for td in tr.find_all("td")]
+         #   if len(cols) == 4 and all(cols):
+          #      rank_s, name, pts_s, loc = cols
+           #     try:
+            #        pts_val = int(pts_s)
+             #   except:
+              #      continue
+              #  if pts_val > 0:
+               #     data[ev_name].append({
+                #        "Rank": int(rank_s),
+                 #       "Name": name.strip(),
+                  #      "Points": pts_val,
+                  #      "Location": loc.strip()
+                   # })
+   # return data
 
 def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
@@ -369,31 +375,31 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     has_any = any(len(lst) > 0 for lst in combined.values())
     return combined, has_any
 
-def dedupe_and_rank(event_data: dict):
-    clean = {}
-    for ev, entries in event_data.items():
-        seen = set()
-        uniq = []
-        for e in entries:
-            key = (e["Name"].lower(), e["Location"], e["Points"])
-            if key not in seen:
-                seen.add(key)
-                uniq.append(e)
-        uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
-        prev_points = None
-        prev_rank = None
-        current_pos = 1
-        for item in uniq:
-            if prev_points is None or item["Points"] != prev_points:
-                rank_to_assign = current_pos
-                item["Rank"] = rank_to_assign
-                prev_rank = rank_to_assign
-            else:
-                item["Rank"] = prev_rank
-            prev_points = item["Points"]
-            current_pos += 1
-        clean[ev] = uniq
-    return clean
+#def dedupe_and_rank(event_data: dict):
+ #   clean = {}
+  #  for ev, entries in event_data.items():
+   #     seen = set()
+    #    uniq = []
+     #   for e in entries:
+      #      key = (e["Name"].lower(), e["Location"], e["Points"])
+       #     if key not in seen:
+        #        seen.add(key)
+         #       uniq.append(e)
+        #uniq.sort(key=lambda x: (-x["Points"], x["Name"]))
+        #prev_points = None
+       # prev_rank = None
+        #current_pos = 1
+        #for item in uniq:
+         #   if prev_points is None or item["Points"] != prev_points:
+          #      rank_to_assign = current_pos
+           #     item["Rank"] = rank_to_assign
+           #     prev_rank = rank_to_assign
+            #else:
+             #   item["Rank"] = prev_rank
+           # prev_points = item["Points"]
+           # current_pos += 1
+        #clean[ev] = uniq
+    #return clean
 
 # --- PAGE SELECTION ---
 page_choice = st.selectbox(
