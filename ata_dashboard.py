@@ -245,17 +245,19 @@ REGION_CODES = {
 @st.cache_data(ttl=3600)
 def load_all_title_tabs(sheet_id: str, tabs: dict):
     import pandas as pd
-all_tabs = {}
 
-for title, gid in tabs.items():
-    csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
-    try:
-        df = pd.read_csv(csv_url)
-        all_tabs[title] = df
-    except Exception as e:
-        print(f"Failed to load sheet {title} (gid={gid}): {e}")
-        
-return all_tabs
+    all_tabs = {}
+
+    for title, gid in tabs.items():
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+        try:
+            df = pd.read_csv(csv_url)
+            all_tabs[title] = df
+        except Exception as e:
+            print(f"Failed to load sheet {title} (gid={gid}): {e}")
+
+    return all_tabs
+
 
 SHEET_ID = "1drOQVqj11RGyw1Xda__hVY1zHI8bfH_Hs25pGn-yiCc"
 
