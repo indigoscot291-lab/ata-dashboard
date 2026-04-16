@@ -75,6 +75,69 @@ MATRIX_SHEET_URL = (
     "https://docs.google.com/spreadsheets/d/"
     "1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/export?format=csv&gid=0"
 )
+import requests
+import unicodedata
+
+def normalize_name(name: str) -> str:
+    name = unicodedata.normalize("NFKC", str(name))
+    name = name.replace("\u200b", "").replace("\xa0", " ")
+    return name.strip()
+
+def fetch_standings_api(code, qualifier_type, state_abbrev=None, country="US"):
+    base = "https://atamartialarts.com/wp-json/ata/v1/standings"
+    params = {"code": code}
+
+    if "world" in qualifier_type.lower():
+        params["type"] = "world"
+    else:
+        params["type"] = "state"
+        params["state"] = state_abbrev
+        params["country"] = country
+
+    try:
+        r = requests.get(base, params=params, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        st.error(f"API error for {code}: {e}")
+        return []
+
+def parse_api_standings(data):
+    results = {"Overall": []}
+    for row in data:
+        results["Overall"].append({
+            "Rank": int(row.get("place", 0)),
+            "Name": normalize_name(row.get("name", "")),
+            "Points": int(row.get("points", 0)),
+            "Location": str(row.get("location", "")).strip(),
+        })
+    return results
+
+def dedupe_and_rank(parsed):
+    ranked = {}
+    for event_name, entries in parsed.items():
+        # sort by points desc, then name
+        entries_sorted = sorted(
+            entries,
+            key=lambda e: (-e["Points"], e["Name"].lower())
+        )
+
+        seen = {}
+        clean = []
+        for e in entries_sorted:
+            key = (e["Name"].lower(), e["Location"].lower())
+            if key in seen:
+                continue
+            seen[key] = True
+            clean.append(e)
+
+        # assign rank based on order
+        for i, e in enumerate(clean, start=1):
+            e["Rank"] = i
+
+        ranked[event_name] = clean
+    return ranked
+
 
 @st.cache_data(ttl=3600)
 def load_matrix_groups():
@@ -1031,7 +1094,6 @@ elif page_choice == "Historical Titles":
 elif page_choice == "State & World Qualifiers (All Divisions)":
     st.title("State & World Qualifiers — All Divisions")
 
-    # Ensure session_state key exists BEFORE widgets use it
     if "town_list" not in st.session_state:
         st.session_state["town_list"] = ["(All Towns)"]
 
@@ -1039,7 +1101,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
         st.error("No divisions loaded from the Matrix spreadsheet.")
         st.stop()
 
-    # --- User Inputs ---
     state_choice = st.selectbox("Select State:", sorted(REGION_CODES.keys()))
 
     qualifier_type = st.radio(
@@ -1057,47 +1118,45 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
     go = st.button("Go")
 
     if go:
-        st.info("Scraping ATA standings for all Matrix divisions… this may take a moment.")
+        st.info("Pulling ATA standings via API for all Matrix divisions…")
 
         results = []
         country, state_abbrev = REGION_CODES[state_choice]
 
-        # Loop through ALL divisions from the Matrix
         for div_name, div_info in MATRIX_GROUPS.items():
             code = div_info["code"]
 
-            # --- Build URL based on qualifier type ---
-            if "District" in qualifier_type:
-                # Only selected state
-                url = div_info["state_url_template"].format(country, state_abbrev, code)
-            else:
-                # World standings
-                url = div_info["world_url"]
-
-            html = fetch_html(url)
-            if not html:
+            api_data = fetch_standings_api(
+                code,
+                qualifier_type,
+                state_abbrev=state_abbrev,
+                country=country,
+            )
+            if not api_data:
                 continue
 
-            parsed = parse_standings(html)
+            parsed = parse_api_standings(api_data)
             ranked = dedupe_and_rank(parsed)
 
-            # --- Process each event ---
             for event_name, entries in ranked.items():
                 for e in entries:
-                    loc = e["Location"]
-                    if "," in loc:
-                        town, st_abbrev = loc.split(",", 1)
-                        town = town.strip()
-                        st_abbrev = st_abbrev.strip()
-                    else:
-                        town = loc.strip()
-                        st_abbrev = ""
+                    loc = e["Location"].strip()
 
-                    # --- Filter by selected state ---
-                    if st_abbrev != state_abbrev:
+                    # normalize commas / no-commas
+                    loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+                    if "," in loc_norm:
+                        town, st_abbrev = loc_norm.split(",", 1)
+                    else:
+                        parts = loc_norm.split()
+                        town = " ".join(parts[:-1]) if len(parts) > 1 else loc_norm
+                        st_abbrev = parts[-1] if len(parts) > 1 else ""
+
+                    town = town.strip()
+                    st_abbrev = st_abbrev.replace(".", "").strip().upper()
+
+                    if st_abbrev != state_abbrev.upper():
                         continue
 
-                    # --- Town filter ---
                     if town_text:
                         if town_text.lower() not in town.lower():
                             continue
@@ -1105,7 +1164,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         if town_dropdown.lower() != town.lower():
                             continue
 
-                    # --- Top 10 filter ---
                     if e["Rank"] > 10:
                         continue
 
@@ -1117,24 +1175,21 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         "Rank": e["Rank"],
                         "Points": e["Points"],
                         "Division": div_name,
-                        "Code": code
+                        "Code": code,
                     })
 
-        # --- Update Town List AFTER scraping ---
         if results:
             towns = sorted(set(r["Town"] for r in results))
             st.session_state["town_list"] = ["(All Towns)"] + towns
             st.write("### Available Towns in This State (from qualifiers):")
             st.write(", ".join(towns))
 
-        # --- Display Results ---
         if not results:
             st.warning("No qualifiers found for the selected filters.")
         else:
             df = pd.DataFrame(results)
             df = df.sort_values(["Division", "Event", "Rank", "Name"])
-
             st.success(f"Found {len(df)} qualifiers.")
             st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
-    
-    
+
+  
