@@ -1259,7 +1259,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             df = pd.DataFrame(final_rows)
 
-            # --- SORT BY LAST NAME (robust version) ---
+            # --- SORT BY LAST NAME ONLY ---
             def extract_last_name(full):
                 parts = full.replace(",", "").split()
                 if len(parts) == 0:
@@ -1272,8 +1272,8 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             df["LastName"] = df["Name"].apply(extract_last_name)
 
             df = df.sort_values(
-                ["Division", "LastName", "Name"],
-                ascending=[True, True, True]
+                ["LastName", "Name"],
+                ascending=[True, True]
             ).reset_index(drop=True)
 
             df = df.drop(columns=["LastName"])
@@ -1296,12 +1296,14 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE (Events column wide, others auto-size) ---
+            # --- DISPLAY TABLE (Events wide, others auto-size) ---
             st.dataframe(
                 df,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
+                    "Name": st.column_config.TextColumn(width="auto"),
+                    "Division": st.column_config.TextColumn(width="auto"),
                     "Events": st.column_config.TextColumn(width="1200px")
                 }
             )
