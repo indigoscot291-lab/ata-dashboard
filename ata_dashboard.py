@@ -1236,11 +1236,11 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
                 collated[key]["Events"].append(row["Event"])
                 
+            # DEBUG
             st.write("DEBUG — EVENTS FOR KEY COMPETITORS:")
             for key, row in collated.items():
                 if row["Name"] in ["Gail Anthony", "Dee Osborne", "Andrew Otake"]:
                     st.write(row["Name"], row["Division"], row["Events"])
-
 
             # Convert to final rows
             final_rows = []
@@ -1273,6 +1273,13 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
 
             st.success(f"Found {len(df) - (1 if town_text else 0)} qualifiers.")
-            st.dataframe(df, use_container_width=True, hide_index=True)
 
-
+            # ⭐ FIXED: Events column now wraps so ALL 8 events display
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Events": st.column_config.TextColumn(width="large")
+                }
+            )
