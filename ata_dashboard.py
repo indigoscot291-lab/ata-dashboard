@@ -1252,13 +1252,16 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             for data in collated.values():
                 events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
-                data["Events"] = ", ".join(events)
+
+                # ⭐ FIX: Put each event on its own line so Streamlit shows all 8
+                data["Events"] = "\n".join(events)
+
                 total_events += len(events)
                 final_rows.append(data)
 
             df = pd.DataFrame(final_rows)
 
-            # --- SORT BY LAST NAME ONLY ---
+            # --- SORT BY LAST NAME ---
             def extract_last_name(full):
                 parts = full.replace(",", "").split()
                 if len(parts) == 0:
@@ -1292,3 +1295,12 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             # --- DISPLAY TABLE (WRAPS EVENTS, SHOWS ALL 8) ---
             st.write(df)
+
+            # --- EXPORT WITHOUT INDEX COLUMN ---
+            csv = df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name="qualifiers.csv",
+                mime="text/csv"
+            )
