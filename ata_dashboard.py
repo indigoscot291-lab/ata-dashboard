@@ -1235,6 +1235,12 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     }
 
                 collated[key]["Events"].append(row["Event"])
+                
+print("DEBUG — EVENTS FOR KEY COMPETITORS:")
+for key, row in collated.items():
+    if row["Name"] in ["Gail Anthony", "Dee Osborne", "Andrew Otake"]:
+        print(row["Name"], row["Division"], row["Events"])
+
 
             # Convert to final rows
             final_rows = []
