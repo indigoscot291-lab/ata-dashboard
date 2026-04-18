@@ -1296,14 +1296,13 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE (Events wide, others auto-size) ---
+            # --- DISPLAY TABLE: scrollable horizontally, Events wide, others natural ---
             st.dataframe(
                 df,
-                use_container_width=True,
+                use_container_width=False,   # allow horizontal scroll
                 hide_index=True,
                 column_config={
-                    "Name": st.column_config.TextColumn(width="auto"),
-                    "Division": st.column_config.TextColumn(width="auto"),
-                    "Events": st.column_config.TextColumn(width="1200px")
+                    # No explicit width for Name/Division -> Streamlit sizes them reasonably
+                    "Events": st.column_config.TextColumn(width="800px")
                 }
             )
