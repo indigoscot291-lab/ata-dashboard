@@ -1118,15 +1118,6 @@ elif page_choice == "Historical Titles":
 elif page_choice == "State & World Qualifiers (All Divisions)":
     st.title("State & World Qualifiers — All Divisions")    
 
-    # Force table to be wide enough to show all events
-    st.markdown("""
-    <style>
-    div[data-testid="stDataFrame"] > div {
-        min-width: 1500px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
         st.stop()
@@ -1268,12 +1259,23 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             df = pd.DataFrame(final_rows)
 
-            # --- SORT BY LAST NAME ---
-            df["LastName"] = df["Name"].apply(lambda x: x.split()[-1].strip())
+            # --- SORT BY LAST NAME (robust version) ---
+            def extract_last_name(full):
+                parts = full.replace(",", "").split()
+                if len(parts) == 0:
+                    return ""
+                suffixes = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
+                if parts[-1].lower() in suffixes and len(parts) > 1:
+                    return parts[-2]
+                return parts[-1]
+
+            df["LastName"] = df["Name"].apply(extract_last_name)
+
             df = df.sort_values(
                 ["Division", "LastName", "Name"],
                 ascending=[True, True, True]
             ).reset_index(drop=True)
+
             df = df.drop(columns=["LastName"])
 
             # --- ADD SUMMARY ROW ONLY IF A TOWN IS ENTERED ---
@@ -1294,12 +1296,12 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE (wide enough to show all events) ---
+            # --- DISPLAY TABLE (Events column wide, others auto-size) ---
             st.dataframe(
                 df,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Events": st.column_config.TextColumn(width="1500px")
+                    "Events": st.column_config.TextColumn(width="1200px")
                 }
             )
