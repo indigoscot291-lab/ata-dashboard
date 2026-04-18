@@ -1214,12 +1214,11 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         "Code": code,
                     })
 
-        # Output
         if not results:
             st.warning("No qualifiers found for the selected filters.")
         else:
 
-            # --- COLLATE RESULTS INTO ONE ROW PER COMPETITOR ---
+            # --- COLLATE RESULTS ---
             collated = {}
 
             for row in results:
@@ -1236,7 +1235,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
                 collated[key]["Events"].append(row["Event"])
 
-            # --- CONVERT TO FINAL ROWS ---
+            # --- EVENT ORDER ---
             EVENT_ORDER = {
                 "Forms": 1,
                 "Weapons": 2,
@@ -1259,7 +1258,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             df = pd.DataFrame(final_rows)
 
-            # --- SORT BY LAST NAME ONLY ---
+            # --- SORT BY LAST NAME ---
             def extract_last_name(full):
                 parts = full.replace(",", "").split()
                 if len(parts) == 0:
@@ -1270,15 +1269,10 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 return parts[-1]
 
             df["LastName"] = df["Name"].apply(extract_last_name)
-
-            df = df.sort_values(
-                ["LastName", "Name"],
-                ascending=[True, True]
-            ).reset_index(drop=True)
-
+            df = df.sort_values(["LastName", "Name"]).reset_index(drop=True)
             df = df.drop(columns=["LastName"])
 
-            # --- ADD SUMMARY ROW ONLY IF A TOWN IS ENTERED ---
+            # --- SUMMARY ROW ---
             if town_text:
                 summary_row = {
                     "Name": f"Number of qualifiers: {len(df)}",
@@ -1289,20 +1283,22 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 }
                 df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
 
-            # --- REMOVE TOWN + STATE COLUMNS IF TOWN FILTER USED ---
+            # --- REMOVE TOWN/STATE IF FILTERED ---
             if town_text:
                 df = df.drop(columns=["Town", "State"])
                 st.success(f"Found {len(df) - 1} qualifiers from {town_text}, {state_abbrev}.")
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE: scrollable horizontally, Events wide, others natural ---
+            # --- DISPLAY TABLE WITH TRUE WIDTH CONTROL ---
+            styled = df.style.set_table_styles([
+                {"selector": "th.col_heading.level0.col0", "props": [("min-width", "150px")]},   # Name
+                {"selector": "th.col_heading.level0.col1", "props": [("min-width", "150px")]},   # Division
+                {"selector": "th.col_heading.level0.col2", "props": [("min-width", "1200px")]},  # Events
+            ])
+
             st.dataframe(
-                df,
-                use_container_width=False,   # allow horizontal scroll
-                hide_index=True,
-                column_config={
-                    # No explicit width for Name/Division -> Streamlit sizes them reasonably
-                    "Events": st.column_config.TextColumn(width="800px")
-                }
+                styled,
+                use_container_width=False,   # enables horizontal scroll
+                hide_index=True
             )
