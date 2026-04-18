@@ -1230,35 +1230,48 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         "Name": row["Name"],
                         "Town": row["Town"],
                         "State": row["State"],
-                        "Division": row["Division"],   # full name from Matrix
+                        "Division": row["Division"],
                         "Events": [],
                     }
 
                 collated[key]["Events"].append(row["Event"])
-                
-            # DEBUG
-            st.write("DEBUG — EVENTS FOR KEY COMPETITORS:")
-            for key, row in collated.items():
-                if row["Name"] in ["Gail Anthony", "Dee Osborne", "Andrew Otake"]:
-                    st.write(row["Name"], row["Division"], row["Events"])
 
-            # Convert to final rows
+            # DEBUG
+            #st.write("DEBUG — EVENTS FOR KEY COMPETITORS:")
+            #for key, row in collated.items():
+                #if row["Name"] in ["Gail Anthony", "Dee Osborne", "Andrew Otake"]:
+                    #st.write(row["Name"], row["Division"], row["Events"])
+
+            # --- CONVERT TO FINAL ROWS ---
+            EVENT_ORDER = {
+                "Forms": 1,
+                "Weapons": 2,
+                "Combat Weapons": 3,
+                "Sparring": 4,
+                "Creative Forms": 5,
+                "Creative Weapons": 6,
+                "X-Treme Forms": 7,
+                "X-Treme Weapons": 8,
+            }
+
             final_rows = []
             total_events = 0
 
             for data in collated.values():
-                events = sorted(data["Events"])
+                events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
                 data["Events"] = ", ".join(events)
                 total_events += len(events)
                 final_rows.append(data)
 
             df = pd.DataFrame(final_rows)
 
-            # Sort nicely
+            # --- SORT BY LAST NAME ---
+            df["LastName"] = df["Name"].apply(lambda x: x.split()[-1].strip())
             df = df.sort_values(
-                ["Division", "Name"],
-                ascending=[True, True]
+                ["Division", "LastName", "Name"],
+                ascending=[True, True, True]
             ).reset_index(drop=True)
+            df = df.drop(columns=["LastName"])
 
             # --- ADD SUMMARY ROW ONLY IF A TOWN IS ENTERED ---
             if town_text:
@@ -1269,15 +1282,19 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     "Division": "",
                     "Events": f"Number of events: {total_events}",
                 }
-
                 df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
 
-            st.success(f"Found {len(df) - (1 if town_text else 0)} qualifiers.")
+            # --- REMOVE TOWN + STATE COLUMNS IF TOWN FILTER USED ---
+            if town_text:
+                df = df.drop(columns=["Town", "State"])
+                st.success(f"Found {len(df) - 1} qualifiers from {town_text}, {state_abbrev}.")
+            else:
+                st.success(f"Found {len(df)} qualifiers.")
 
-            # ⭐ FIXED: Events column now wraps so ALL 8 events display
+            # --- DISPLAY TABLE WITH HORIZONTAL SCROLL + WRAPPED EVENTS ---
             st.dataframe(
                 df,
-                use_container_width=True,
+                use_container_width=False,   # enables horizontal scroll
                 hide_index=True,
                 column_config={
                     "Events": st.column_config.TextColumn(width="large")
