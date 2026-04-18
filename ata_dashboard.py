@@ -1258,7 +1258,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             df = pd.DataFrame(final_rows)
 
-            # --- SORT BY LAST NAME ---
+            # --- SORT BY LAST NAME ONLY ---
             def extract_last_name(full):
                 parts = full.replace(",", "").split()
                 if len(parts) == 0:
@@ -1290,15 +1290,5 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE WITH TRUE WIDTH CONTROL ---
-            styled = df.style.set_table_styles([
-                {"selector": "th.col_heading.level0.col0", "props": [("min-width", "150px")]},   # Name
-                {"selector": "th.col_heading.level0.col1", "props": [("min-width", "150px")]},   # Division
-                {"selector": "th.col_heading.level0.col2", "props": [("min-width", "1200px")]},  # Events
-            ])
-
-            st.dataframe(
-                styled,
-                use_container_width=False,   # enables horizontal scroll
-                hide_index=True
-            )
+            # --- DISPLAY TABLE (WRAPS EVENTS, SHOWS ALL 8) ---
+            st.write(df)
