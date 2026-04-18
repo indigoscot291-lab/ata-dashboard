@@ -1118,6 +1118,15 @@ elif page_choice == "Historical Titles":
 elif page_choice == "State & World Qualifiers (All Divisions)":
     st.title("State & World Qualifiers — All Divisions")    
 
+    # Force table to be wide enough to show all events
+    st.markdown("""
+    <style>
+    div[data-testid="stDataFrame"] > div {
+        min-width: 1500px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
         st.stop()
@@ -1236,12 +1245,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
                 collated[key]["Events"].append(row["Event"])
 
-            # DEBUG
-            #st.write("DEBUG — EVENTS FOR KEY COMPETITORS:")
-            #for key, row in collated.items():
-                #if row["Name"] in ["Gail Anthony", "Dee Osborne", "Andrew Otake"]:
-                    #st.write(row["Name"], row["Division"], row["Events"])
-
             # --- CONVERT TO FINAL ROWS ---
             EVENT_ORDER = {
                 "Forms": 1,
@@ -1291,12 +1294,12 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE WITH HORIZONTAL SCROLL + WRAPPED EVENTS ---
+            # --- DISPLAY TABLE (wide enough to show all events) ---
             st.dataframe(
                 df,
-                use_container_width=False,   # enables horizontal scroll
+                use_container_width=True,
                 hide_index=True,
                 column_config={
-                    "Events": st.column_config.TextColumn(width="large")
+                    "Events": st.column_config.TextColumn(width="1500px")
                 }
             )
