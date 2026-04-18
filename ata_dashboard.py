@@ -1118,9 +1118,6 @@ elif page_choice == "Historical Titles":
 elif page_choice == "State & World Qualifiers (All Divisions)":
     st.title("State & World Qualifiers — All Divisions")    
 
-    if "town_list" not in st.session_state:
-        st.session_state["town_list"] = ["(All Towns)"]
-
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
         st.stop()
@@ -1138,13 +1135,8 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
     )
 
     st.write("### Town Filter (Optional)")
-    town_dropdown = st.selectbox(
-        "Select Town (from scraped data):",
-        st.session_state["town_list"],
-        key="town_dropdown_all_divisions"
-    )
     town_text = st.text_input(
-        "Or type a town name:",
+        "Type a town name:",
         key="town_text_all_divisions"
     )
 
@@ -1168,14 +1160,13 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             # Fetch HTML
             html = fetch_html_v2(url)
 
-            # ✅ Guard: make sure html is a string before parsing
+            # Guard: ensure HTML is valid
             if not isinstance(html, str) or not html.strip():
                 st.warning(f"Skipping {div_name} — invalid HTML returned for URL: {url}")
                 continue
 
             # Parse + rank
             parsed = parse_multi_event_standings(html)
-            #st.write("DEBUG PARSED:", {div_name}, parsed)
             ranked = dedupe_and_rank(parsed)
 
             # Process rows
@@ -1198,17 +1189,14 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     town = town.strip()
                     st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
 
-                    # State filter (only for District)
+                    # State filter (District only)
                     if "District" in qualifier_type:
                         if st_abbrev2 != state_abbrev.upper():
                             continue
 
-                    # Town filters
+                    # Town filter (ONLY text now)
                     if town_text:
                         if town_text.lower() not in town.lower():
-                            continue
-                    elif town_dropdown != "(All Towns)":
-                        if town_dropdown.lower() != town.lower():
                             continue
 
                     # Top 10 only
@@ -1226,19 +1214,59 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         "Code": code,
                     })
 
-        # Update town list
-        if results:
-            towns = sorted(set(r["Town"] for r in results))
-            st.session_state["town_list"] = ["(All Towns)"] + towns
-            st.write("### Available Towns in This State (from qualifiers):")
-            st.write(", ".join(towns))
-
         # Output
         if not results:
             st.warning("No qualifiers found for the selected filters.")
         else:
-            df = pd.DataFrame(results)
-            df = df.sort_values(["Division", "Event", "Rank", "Name"])
-            st.success(f"Found {len(df)} qualifiers.")
-            st.dataframe(df.reset_index(drop=True), use_container_width=True, hide_index=True)
-                
+
+            # --- COLLATE RESULTS INTO ONE ROW PER COMPETITOR ---
+            collated = {}
+
+            for row in results:
+                key = (row["Name"], row["Town"], row["State"], row["Division"])
+
+                if key not in collated:
+                    collated[key] = {
+                        "Name": row["Name"],
+                        "Town": row["Town"],
+                        "State": row["State"],
+                        "Division": row["Division"],   # full name from Matrix
+                        "Events": [],
+                    }
+
+                collated[key]["Events"].append(row["Event"])
+
+            # Convert to final rows
+            final_rows = []
+            total_events = 0
+
+            for data in collated.values():
+                events = sorted(data["Events"])
+                data["Events"] = ", ".join(events)
+                total_events += len(events)
+                final_rows.append(data)
+
+            df = pd.DataFrame(final_rows)
+
+            # Sort nicely
+            df = df.sort_values(
+                ["Division", "Name"],
+                ascending=[True, True]
+            ).reset_index(drop=True)
+
+            # --- ADD SUMMARY ROW ONLY IF A TOWN IS ENTERED ---
+            if town_text:
+                summary_row = {
+                    "Name": f"Number of qualifiers: {len(df)}",
+                    "Town": "",
+                    "State": "",
+                    "Division": "",
+                    "Events": f"Number of events: {total_events}",
+                }
+
+                df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
+
+            st.success(f"Found {len(df) - (1 if town_text else 0)} qualifiers.")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+
