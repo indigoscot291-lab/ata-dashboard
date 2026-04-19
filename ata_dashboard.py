@@ -1291,7 +1291,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
         # Success message based on current df
         if town_text:
-            st.success(f"Found {len(df) - 1} qualifiers from {town_text}, {state_abbrev}.")
+            st.success(f"Found {len(df) - 1} qualifiers.")
         else:
             st.success(f"Found {len(df)} qualifiers.")
 
@@ -1299,18 +1299,14 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
         display_df = df.copy()
 
         html_table = """
-        <style>
-        table, th, td {
-            text-align: left !important;
-        }
-        </style>
-        """ + display_df.to_html(index=False, escape=False)
+<style>
+table, th, td {
+    text-align: left !important;
+}
+</style>
+""" + display_df.to_html(index=False, escape=False)
 
         st.markdown(html_table, unsafe_allow_html=True)
-
-       # """ + display_df.to_html(index=False, escape=False)
-
-        #st.write(html_table, unsafe_allow_html=True)
 
         # --- EXPORT CSV: no index, Events as comma-separated (no <br>) ---
         export_df = df.copy()
