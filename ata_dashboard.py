@@ -1142,6 +1142,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
     go = st.button("Go", key="go_button_all_divisions")
 
+    # --- WHEN GO IS CLICKED: BUILD AND STORE DF IN SESSION_STATE ---
     if go:
         st.info("Pulling ATA standings for all Matrix divisions…")
 
@@ -1209,9 +1210,9 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     })
 
         if not results:
+            st.session_state.pop("qual_df_all_divisions", None)
             st.warning("No qualifiers found for the selected filters.")
         else:
-
             # --- COLLATE RESULTS ---
             collated = {}
 
@@ -1244,11 +1245,8 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             for data in collated.values():
                 events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
 
-                # ⭐ SCREEN DISPLAY VERSION (multi-line)
+                # Screen display: multi-line in same cell
                 data["Events"] = "<br>".join(events)
-
-                # ⭐ EXPORT VERSION (comma-separated)
-                data["EventsExport"] = ", ".join(events)
 
                 total_events += len(events)
                 final_rows.append(data)
@@ -1277,30 +1275,48 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     "State": "",
                     "Division": "",
                     "Events": f"Number of events: {total_events}",
-                    "EventsExport": f"Number of events: {total_events}",
                 }
                 df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
 
             # --- REMOVE TOWN/STATE IF FILTERED ---
             if town_text:
                 df = df.drop(columns=["Town", "State"])
-                st.success(f"Found {len(df) - 1} qualifiers from {town_text}, {state_abbrev}.")
-            else:
-                st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE (HTML so <br> renders as new lines) ---
-            display_df = df.drop(columns=["EventsExport"])
-            st.write(display_df.to_html(escape=False), unsafe_allow_html=True)
+            # Store final df in session_state so it survives reruns (e.g., CSV download)
+            st.session_state["qual_df_all_divisions"] = df
 
-            # --- EXPORT WITHOUT INDEX, WITHOUT <br> ---
-            export_df = df.drop(columns=["Events"]) \
-                          .rename(columns={"EventsExport": "Events"})
+    # --- IF WE HAVE A STORED DF, DISPLAY + EXPORT IT ---
+    if "qual_df_all_divisions" in st.session_state:
+        df = st.session_state["qual_df_all_divisions"]
 
-            csv = export_df.to_csv(index=False).encode("utf-8")
+        # Success message based on current df
+        if town_text:
+            st.success(f"Found {len(df) - 1} qualifiers from {town_text}, {state_abbrev}.")
+        else:
+            st.success(f"Found {len(df)} qualifiers.")
 
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name="qualifiers.csv",
-                mime="text/csv"
-            )
+        # --- DISPLAY TABLE: no index, left-aligned, multi-line events ---
+        display_df = df.copy()
+
+        html_table = """
+        <style>
+        table, th, td {
+            text-align: left;
+        }
+        </style>
+        """ + display_df.to_html(index=False, escape=False)
+
+        st.write(html_table, unsafe_allow_html=True)
+
+        # --- EXPORT CSV: no index, Events as comma-separated (no <br>) ---
+        export_df = df.copy()
+        export_df["Events"] = export_df["Events"].astype(str).str.replace("<br>", ", ")
+
+        csv = export_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name="qualifiers.csv",
+            mime="text/csv"
+        )
