@@ -1304,9 +1304,20 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             text-align: left;
         }
         </style>
+
+        html_table = """
+        <style>
+        table, th, td {
+            text-align: left !important;
+        }
+        </style>
         """ + display_df.to_html(index=False, escape=False)
 
-        st.write(html_table, unsafe_allow_html=True)
+        st.markdown(html_table, unsafe_allow_html=True)
+
+       # """ + display_df.to_html(index=False, escape=False)
+
+        #st.write(html_table, unsafe_allow_html=True)
 
         # --- EXPORT CSV: no index, Events as comma-separated (no <br>) ---
         export_df = df.copy()
