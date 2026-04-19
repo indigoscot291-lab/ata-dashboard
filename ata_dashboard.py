@@ -1253,8 +1253,8 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             for data in collated.values():
                 events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
 
-                # ⭐ FIX: Put each event on its own line so Streamlit shows all 8
-                data["Events"] = "\n".join(events)
+                # ⭐ FIX: HTML line breaks so Streamlit renders multi-line cells
+                data["Events"] = "<br>".join(events)
 
                 total_events += len(events)
                 final_rows.append(data)
@@ -1293,8 +1293,8 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             else:
                 st.success(f"Found {len(df)} qualifiers.")
 
-            # --- DISPLAY TABLE (WRAPS EVENTS, SHOWS ALL 8) ---
-            st.write(df)
+            # --- DISPLAY TABLE (HTML so <br> renders as new lines) ---
+            st.write(df.to_html(escape=False), unsafe_allow_html=True)
 
             # --- EXPORT WITHOUT INDEX COLUMN ---
             csv = df.to_csv(index=False).encode("utf-8")
