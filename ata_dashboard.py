@@ -1160,16 +1160,13 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             # Fetch HTML
             html = fetch_html_v2(url)
 
-            # Guard: ensure HTML is valid
             if not isinstance(html, str) or not html.strip():
                 st.warning(f"Skipping {div_name} — invalid HTML returned for URL: {url}")
                 continue
 
-            # Parse + rank
             parsed = parse_multi_event_standings(html)
             ranked = dedupe_and_rank(parsed)
 
-            # Process rows
             for event_name, entries in ranked.items():
                 for e in entries:
                     loc = e["Location"].strip()
@@ -1189,17 +1186,14 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     town = town.strip()
                     st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
 
-                    # State filter (District only)
                     if "District" in qualifier_type:
                         if st_abbrev2 != state_abbrev.upper():
                             continue
 
-                    # Town filter (ONLY text now)
                     if town_text:
                         if town_text.lower() not in town.lower():
                             continue
 
-                    # Top 10 only
                     if e["Rank"] > 10:
                         continue
 
@@ -1223,7 +1217,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             for row in results:
                 key = (row["Name"], row["Town"], row["State"], row["Division"])
-
                 if key not in collated:
                     collated[key] = {
                         "Name": row["Name"],
@@ -1232,10 +1225,8 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                         "Division": row["Division"],
                         "Events": [],
                     }
-
                 collated[key]["Events"].append(row["Event"])
 
-            # --- EVENT ORDER ---
             EVENT_ORDER = {
                 "Forms": 1,
                 "Weapons": 2,
@@ -1253,8 +1244,11 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             for data in collated.values():
                 events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
 
-                # ⭐ FIX: HTML line breaks so Streamlit renders multi-line cells
+                # ⭐ SCREEN DISPLAY VERSION (multi-line)
                 data["Events"] = "<br>".join(events)
+
+                # ⭐ EXPORT VERSION (comma-separated)
+                data["EventsExport"] = ", ".join(events)
 
                 total_events += len(events)
                 final_rows.append(data)
@@ -1283,6 +1277,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                     "State": "",
                     "Division": "",
                     "Events": f"Number of events: {total_events}",
+                    "EventsExport": f"Number of events: {total_events}",
                 }
                 df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
 
@@ -1294,10 +1289,15 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 st.success(f"Found {len(df)} qualifiers.")
 
             # --- DISPLAY TABLE (HTML so <br> renders as new lines) ---
-            st.write(df.to_html(escape=False), unsafe_allow_html=True)
+            display_df = df.drop(columns=["EventsExport"])
+            st.write(display_df.to_html(escape=False), unsafe_allow_html=True)
 
-            # --- EXPORT WITHOUT INDEX COLUMN ---
-            csv = df.to_csv(index=False).encode("utf-8")
+            # --- EXPORT WITHOUT INDEX, WITHOUT <br> ---
+            export_df = df.drop(columns=["Events"]) \
+                          .rename(columns={"EventsExport": "Events"})
+
+            csv = export_df.to_csv(index=False).encode("utf-8")
+
             st.download_button(
                 label="Download CSV",
                 data=csv,
