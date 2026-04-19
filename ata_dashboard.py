@@ -1301,13 +1301,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
         html_table = """
         <style>
         table, th, td {
-            text-align: left;
-        }
-        </style>
-
-        html_table = """
-        <style>
-        table, th, td {
             text-align: left !important;
         }
         </style>
