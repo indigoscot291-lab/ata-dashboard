@@ -1127,103 +1127,219 @@ elif page_choice == "Historical Titles":
                 st.warning("No results found for that competitor.")
 # --- PAGE X: State Qualifiers (All Divisions) ---
 elif page_choice == "State & World Qualifiers (All Divisions)":
-    st.title("State & World Qualifiers — All Divisions")    
+    st.title("State, District & World Qualifiers — All Divisions")    
 
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
         st.stop()
 
-    state_choice = st.selectbox(
-        "Select State:",
-        sorted(REGION_CODES.keys()),
-        key="state_choice_all_divisions"
+    # --- REPORT TYPE SELECTOR (Option A) ---
+    report_type = st.radio(
+        "Select Report Type:",
+        [
+            "District / World Qualifiers (Top 10)",
+            "State Champions (Rank 1 + ties)",
+            "District-wide Qualifiers (Top 10 in District)",
+        ],
+        key="report_type_all_divisions"
     )
 
-    qualifier_type = st.radio(
-        "Select Qualifier Type:",
-        ["District Qualifiers (Top 10 State)", "World Qualifiers (Top 10 World)"],
-        key="qualifier_type_all_divisions"
-    )
+    # --- MODE 1 & 2: STATE-BASED ---
+    if report_type in [
+        "District / World Qualifiers (Top 10)",
+        "State Champions (Rank 1 + ties)",
+    ]:
+        state_choice = st.selectbox(
+            "Select State:",
+            sorted(REGION_CODES.keys()),
+            key="state_choice_all_divisions"
+        )
 
-    st.write("### Town Filter (Optional)")
-    town_text = st.text_input(
-        "Type a town name:",
-        key="town_text_all_divisions"
-    )
+        st.write("### Town Filter (Optional)")
+        town_text = st.text_input(
+            "Type a town name:",
+            key="town_text_all_divisions"
+        )
 
-    go = st.button("Go", key="go_button_all_divisions")
+        if report_type == "District / World Qualifiers (Top 10)":
+            qualifier_type = st.radio(
+                "Select Qualifier Type:",
+                ["District Qualifiers (Top 10 State)", "World Qualifiers (Top 10 World)"],
+                key="qualifier_type_all_divisions"
+            )
+        else:
+            qualifier_type = "State Champions"
 
-    # --- WHEN GO IS CLICKED: BUILD AND STORE DF IN SESSION_STATE ---
+        go = st.button("Go", key="go_button_all_divisions")
+
+    # --- MODE 3: DISTRICT-WIDE ---
+    else:
+        district_choice = st.selectbox(
+            "Select District:",
+            sorted(DISTRICT_MAP.keys()),
+            key="district_choice_all_divisions"
+        )
+
+        division_choice = st.selectbox(
+            "Select Division:",
+            sorted(MATRIX_GROUPS.keys()),
+            key="division_choice_all_divisions"
+        )
+
+        town_text = ""  # no town filter in this mode
+        qualifier_type = "District-wide"
+        go = st.button("Go", key="go_button_all_divisions")
+
+    # --- WHEN GO IS CLICKED: BUILD RESULTS ---
     if go:
         st.info("Pulling ATA standings for all Matrix divisions…")
 
         results = []
-        country, state_abbrev = REGION_CODES[state_choice]
 
-        for div_name, div_info in MATRIX_GROUPS.items():
+        # Helper: abbrev -> (country, state_name)
+        abbrev_to_country = {
+            abbrev: (country, state_name)
+            for state_name, (country, abbrev) in REGION_CODES.items()
+        }
+
+        # --- MODE 1 & 2: STATE-BASED ---
+        if report_type in [
+            "District / World Qualifiers (Top 10)",
+            "State Champions (Rank 1 + ties)",
+        ]:
+            country, state_abbrev = REGION_CODES[state_choice]
+
+            for div_name, div_info in MATRIX_GROUPS.items():
+                code = div_info["code"]
+
+                # Build correct URL
+                if report_type == "District / World Qualifiers (Top 10)" and "World" in qualifier_type:
+                    url = div_info["world_url"]
+                else:
+                    url = div_info["state_url_template"].format(country, state_abbrev, code)
+
+                html = fetch_html_v2(url)
+                if not isinstance(html, str) or not html.strip():
+                    st.warning(f"Skipping {div_name} — invalid HTML returned for URL: {url}")
+                    continue
+
+                parsed = parse_multi_event_standings(html)
+                ranked = dedupe_and_rank(parsed)
+
+                for event_name, entries in ranked.items():
+                    for e in entries:
+                        loc = e["Location"].strip()
+                        loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+
+                        if "," in loc_norm:
+                            town, st_abbrev2 = loc_norm.split(",", 1)
+                        else:
+                            parts = loc_norm.split()
+                            if len(parts) > 1:
+                                town = " ".join(parts[:-1])
+                                st_abbrev2 = parts[-1]
+                            else:
+                                town = loc_norm
+                                st_abbrev2 = ""
+
+                        town = town.strip()
+                        st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
+
+                        # District qualifiers: enforce state match
+                        if report_type == "District / World Qualifiers (Top 10)" and "District" in qualifier_type:
+                            if st_abbrev2 != state_abbrev.upper():
+                                continue
+
+                        # Town filter (normalized)
+                        if town_text:
+                            if normalize_town(town_text) not in normalize_town(town):
+                                continue
+
+                        # Rank filter
+                        if report_type == "District / World Qualifiers (Top 10)":
+                            if e["Rank"] > 10:
+                                continue
+
+                        results.append({
+                            "Name": e["Name"],
+                            "Town": town,
+                            "State": st_abbrev2,
+                            "Event": event_name,
+                            "Rank": e["Rank"],
+                            "Points": e["Points"],
+                            "Division": div_name,
+                            "Code": code,
+                        })
+
+            # --- STATE CHAMPIONS FILTER (Rank 1 + ties) ---
+            if report_type == "State Champions (Rank 1 + ties)" and results:
+                min_rank_by_event = {}
+                for r in results:
+                    ev = r["Event"]
+                    rnk = r["Rank"]
+                    if ev not in min_rank_by_event or rnk < min_rank_by_event[ev]:
+                        min_rank_by_event[ev] = rnk
+
+                results = [
+                    r for r in results
+                    if r["Rank"] == min_rank_by_event.get(r["Event"], r["Rank"])
+                ]
+
+        # --- MODE 3: DISTRICT-WIDE ---
+        else:
+            div_name = division_choice
+            div_info = MATRIX_GROUPS[div_name]
             code = div_info["code"]
 
-            # Build correct URL
-            if "World" in qualifier_type:
-                url = div_info["world_url"]
-            else:
+            for state_abbrev in DISTRICT_MAP.get(district_choice, []):
+                if state_abbrev not in abbrev_to_country:
+                    continue
+                country, state_name = abbrev_to_country[state_abbrev]
+
                 url = div_info["state_url_template"].format(country, state_abbrev, code)
 
-            # Fetch HTML
-            html = fetch_html_v2(url)
+                html = fetch_html_v2(url)
+                if not isinstance(html, str) or not html.strip():
+                    st.warning(f"Skipping {div_name} / {state_abbrev} — invalid HTML returned for URL: {url}")
+                    continue
 
-            if not isinstance(html, str) or not html.strip():
-                st.warning(f"Skipping {div_name} — invalid HTML returned for URL: {url}")
-                continue
+                parsed = parse_multi_event_standings(html)
+                ranked = dedupe_and_rank(parsed)
 
-            parsed = parse_multi_event_standings(html)
-            ranked = dedupe_and_rank(parsed)
+                for event_name, entries in ranked.items():
+                    for e in entries:
+                        loc = e["Location"].strip()
+                        loc_norm = loc.replace(", ", ",").replace(" ,", ",")
 
-            for event_name, entries in ranked.items():
-                for e in entries:
-                    loc = e["Location"].strip()
-                    loc_norm = loc.replace(", ", ",").replace(" ,", ",")
-
-                    if "," in loc_norm:
-                        town, st_abbrev2 = loc_norm.split(",", 1)
-                    else:
-                        parts = loc_norm.split()
-                        if len(parts) > 1:
-                            town = " ".join(parts[:-1])
-                            st_abbrev2 = parts[-1]
+                        if "," in loc_norm:
+                            town, st_abbrev2 = loc_norm.split(",", 1)
                         else:
-                            town = loc_norm
-                            st_abbrev2 = ""
+                            parts = loc_norm.split()
+                            if len(parts) > 1:
+                                town = " ".join(parts[:-1])
+                                st_abbrev2 = parts[-1]
+                            else:
+                                town = loc_norm
+                                st_abbrev2 = ""
 
-                    town = town.strip()
-                    st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
+                        town = town.strip()
+                        st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
 
-                    if "District" in qualifier_type:
-                        if st_abbrev2 != state_abbrev.upper():
+                        if e["Rank"] > 10:
                             continue
 
-                    if town_text:
-                        if normalize_town(town_text) not in normalize_town(town):
-                            continue
-                            
-                    #if town_text:
-                        #if town_text.lower() not in town.lower():
-                            #continue
+                        results.append({
+                            "Name": e["Name"],
+                            "Town": town,
+                            "State": st_abbrev2,
+                            "Event": event_name,
+                            "Rank": e["Rank"],
+                            "Points": e["Points"],
+                            "Division": div_name,
+                            "Code": code,
+                        })
 
-                    if e["Rank"] > 10:
-                        continue
-
-                    results.append({
-                        "Name": e["Name"],
-                        "Town": town,
-                        "State": st_abbrev2,
-                        "Event": event_name,
-                        "Rank": e["Rank"],
-                        "Points": e["Points"],
-                        "Division": div_name,
-                        "Code": code,
-                    })
-
+        # --- NO RESULTS ---
         if not results:
             st.session_state.pop("qual_df_all_divisions", None)
             st.warning("No qualifiers found for the selected filters.")
@@ -1259,10 +1375,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
             for data in collated.values():
                 events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
-
-                # Screen display: multi-line in same cell
                 data["Events"] = "<br>".join(events)
-
                 total_events += len(events)
                 final_rows.append(data)
 
@@ -1282,8 +1395,11 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             df = df.sort_values(["LastName", "Name"]).reset_index(drop=True)
             df = df.drop(columns=["LastName"])
 
-            # --- SUMMARY ROW ---
-            if town_text:
+            # --- SUMMARY ROW (only for town filter modes) ---
+            if report_type in [
+                "District / World Qualifiers (Top 10)",
+                "State Champions (Rank 1 + ties)",
+            ] and town_text:
                 summary_row = {
                     "Name": f"Number of qualifiers: {len(df)}",
                     "Town": "",
@@ -1294,23 +1410,28 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                 df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
 
             # --- REMOVE TOWN/STATE IF FILTERED ---
-            if town_text:
+            if report_type in [
+                "District / World Qualifiers (Top 10)",
+                "State Champions (Rank 1 + ties)",
+            ] and town_text:
                 df = df.drop(columns=["Town", "State"])
 
-            # Store final df in session_state so it survives reruns (e.g., CSV download)
             st.session_state["qual_df_all_divisions"] = df
+            st.session_state["qual_report_type"] = report_type
 
-    # --- IF WE HAVE A STORED DF, DISPLAY + EXPORT IT ---
+    # --- DISPLAY + EXPORT ---
     if "qual_df_all_divisions" in st.session_state:
         df = st.session_state["qual_df_all_divisions"]
+        report_type = st.session_state.get("qual_report_type", "")
 
-        # Success message based on current df
-        if town_text:
-            st.success(f"Found {len(df) - 1} qualifiers.")
+        if report_type == "State Champions (Rank 1 + ties)":
+            st.success(f"Found {len(df)} state champions.")
+        elif report_type == "District-wide Qualifiers (Top 10 in District)":
+            st.success(f"Found {len(df)} district-wide qualifiers.")
         else:
             st.success(f"Found {len(df)} qualifiers.")
 
-        # --- DISPLAY TABLE: no index, left-aligned, multi-line events ---
+        # --- DISPLAY TABLE ---
         display_df = df.copy()
 
         html_table = """
@@ -1323,7 +1444,7 @@ table, th, td {
 
         st.markdown(html_table, unsafe_allow_html=True)
 
-        # --- EXPORT CSV: no index, Events as comma-separated (no <br>) ---
+        # --- EXPORT CSV ---
         export_df = df.copy()
         export_df["Events"] = export_df["Events"].astype(str).str.replace("<br>", ", ")
 
