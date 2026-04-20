@@ -70,6 +70,30 @@ REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
 district_df = pd.read_csv(DISTRICT_SHEET_URL)
 
+# Build district map for District qualifiers
+# Build full-name → abbreviation lookup from REGION_CODES
+name_to_abbrev = {
+    full_name: abbrev
+    for full_name, (country, abbrev) in REGION_CODES.items()
+}
+
+# Build District → [state_abbrev] mapping from the Google Sheet
+DISTRICT_MAP = {}
+
+for _, row in district_df.iterrows():
+    district = row["District"]
+    states_str = row["States and Provinces"]
+
+    abbrs = []
+    for s in str(states_str).split(","):
+        s_clean = s.strip()
+        abbr = name_to_abbrev.get(s_clean)
+        if abbr:
+            abbrs.append(abbr)
+
+    DISTRICT_MAP[district] = abbrs
+
+
 #Defining Matrix for District and World Qualifiers here
 MATRIX_SHEET_URL_V2 = (
     "https://docs.google.com/spreadsheets/d/"
