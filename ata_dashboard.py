@@ -200,6 +200,17 @@ def parse_multi_event_standings(html: str):
 
     return results
 
+# Function to normalize the town name if it's more than one word
+def normalize_town(t: str) -> str:
+    if not isinstance(t, str):
+        return ""
+    return (
+        t.lower()
+         .replace(",", " ")
+         .replace(".", " ")
+         .replace("  ", " ")
+         .strip()
+    )
 
 
 import requests
@@ -1192,8 +1203,12 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                             continue
 
                     if town_text:
-                        if town_text.lower() not in town.lower():
+                        if normalize_town(town_text) not in normalize_town(town):
                             continue
+                            
+                    #if town_text:
+                        #if town_text.lower() not in town.lower():
+                            #continue
 
                     if e["Rank"] > 10:
                         continue
