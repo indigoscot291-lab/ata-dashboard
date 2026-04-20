@@ -1149,15 +1149,15 @@ elif page_choice == "Historical Titles":
                 st.dataframe(combined, use_container_width=True, hide_index=True)
             else:
                 st.warning("No results found for that competitor.")
-# --- PAGE X: State Qualifiers (All Divisions) ---
-elif page_choice == "State & World Qualifiers (All Divisions)":
-    st.title("State, District & World Qualifiers — All Divisions")    
+# --- PAGE: State & World Qualifiers (All Divisions) ---
+if page_choice == "State & World Qualifiers (All Divisions)":
+    st.title("State Champs, District & World Qualifiers — All Divisions")
 
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
         st.stop()
 
-    # --- REPORT TYPE SELECTOR (Option A) ---
+    # --- REPORT TYPE SELECTOR ---
     report_type = st.radio(
         "Select Report Type:",
         [
@@ -1214,16 +1214,30 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
         qualifier_type = "District-wide"
         go = st.button("Go", key="go_button_all_divisions")
 
-    # --- WHEN GO IS CLICKED: BUILD RESULTS ---
+    # --- WHEN GO IS CLICKED ---
     if go:
         st.info("Pulling ATA standings for all Matrix divisions…")
 
         results = []
 
-        # Helper: abbrev -> (country, state_name)
+        # Reverse lookup: abbrev → (country, state_name)
         abbrev_to_country = {
             abbrev: (country, state_name)
             for state_name, (country, abbrev) in REGION_CODES.items()
+        }
+
+        # --- PROVINCE NAME → ABBREV MAP ---
+        PROVINCE_NAME_TO_ABBREV = {
+            "Alberta": "AB",
+            "British Columbia": "BC",
+            "Manitoba": "MB",
+            "New Brunswick": "NB",
+            "Newfoundland and Labrador": "NL",
+            "Nova Scotia": "NS",
+            "Ontario": "ON",
+            "Prince Edward Island": "PE",
+            "Quebec": "QC",
+            "Saskatchewan": "SK",
         }
 
         # --- MODE 1 & 2: STATE-BASED ---
@@ -1236,7 +1250,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             for div_name, div_info in MATRIX_GROUPS.items():
                 code = div_info["code"]
 
-                # Build correct URL
+                # URL selection
                 if report_type == "District / World Qualifiers (Top 10)" and "World" in qualifier_type:
                     url = div_info["world_url"]
                 else:
@@ -1252,34 +1266,41 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
                 for event_name, entries in ranked.items():
                     for e in entries:
+                        # --- LOCATION PARSING ---
                         loc = e["Location"].strip()
                         loc_norm = loc.replace(", ", ",").replace(" ,", ",")
 
                         if "," in loc_norm:
-                            town, st_abbrev2 = loc_norm.split(",", 1)
+                            town, region_part = loc_norm.split(",", 1)
                         else:
                             parts = loc_norm.split()
                             if len(parts) > 1:
                                 town = " ".join(parts[:-1])
-                                st_abbrev2 = parts[-1]
+                                region_part = parts[-1]
                             else:
                                 town = loc_norm
-                                st_abbrev2 = ""
+                                region_part = ""
 
                         town = town.strip()
-                        st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
+                        region_part = region_part.strip()
+
+                        # Province name → abbreviation
+                        if region_part.title() in PROVINCE_NAME_TO_ABBREV:
+                            st_abbrev2 = PROVINCE_NAME_TO_ABBREV[region_part.title()]
+                        else:
+                            st_abbrev2 = region_part.replace(".", "").strip().upper()
 
                         # District qualifiers: enforce state match
                         if report_type == "District / World Qualifiers (Top 10)" and "District" in qualifier_type:
                             if st_abbrev2 != state_abbrev.upper():
                                 continue
 
-                        # Town filter (normalized)
+                        # Town filter
                         if town_text:
                             if normalize_town(town_text) not in normalize_town(town):
                                 continue
 
-                        # Rank filter
+                        # Top 10 filter
                         if report_type == "District / World Qualifiers (Top 10)":
                             if e["Rank"] > 10:
                                 continue
@@ -1295,7 +1316,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
                             "Code": code,
                         })
 
-            # --- STATE CHAMPIONS FILTER (Rank 1 + ties) ---
+            # --- STATE CHAMPIONS FILTER ---
             if report_type == "State Champions (Rank 1 + ties)" and results:
                 min_rank_by_event = {}
                 for r in results:
@@ -1332,22 +1353,29 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
 
                 for event_name, entries in ranked.items():
                     for e in entries:
+                        # --- LOCATION PARSING ---
                         loc = e["Location"].strip()
                         loc_norm = loc.replace(", ", ",").replace(" ,", ",")
 
                         if "," in loc_norm:
-                            town, st_abbrev2 = loc_norm.split(",", 1)
+                            town, region_part = loc_norm.split(",", 1)
                         else:
                             parts = loc_norm.split()
                             if len(parts) > 1:
                                 town = " ".join(parts[:-1])
-                                st_abbrev2 = parts[-1]
+                                region_part = parts[-1]
                             else:
                                 town = loc_norm
-                                st_abbrev2 = ""
+                                region_part = ""
 
                         town = town.strip()
-                        st_abbrev2 = st_abbrev2.replace(".", "").strip().upper()
+                        region_part = region_part.strip()
+
+                        # Province name → abbreviation
+                        if region_part.title() in PROVINCE_NAME_TO_ABBREV:
+                            st_abbrev2 = PROVINCE_NAME_TO_ABBREV[region_part.title()]
+                        else:
+                            st_abbrev2 = region_part.replace(".", "").strip().upper()
 
                         if e["Rank"] > 10:
                             continue
@@ -1419,7 +1447,7 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
             df = df.sort_values(["LastName", "Name"]).reset_index(drop=True)
             df = df.drop(columns=["LastName"])
 
-            # --- SUMMARY ROW (only for town filter modes) ---
+            # --- SUMMARY ROW ---
             if report_type in [
                 "District / World Qualifiers (Top 10)",
                 "State Champions (Rank 1 + ties)",
@@ -1455,7 +1483,6 @@ elif page_choice == "State & World Qualifiers (All Divisions)":
         else:
             st.success(f"Found {len(df)} qualifiers.")
 
-        # --- DISPLAY TABLE ---
         display_df = df.copy()
 
         html_table = """
@@ -1468,7 +1495,6 @@ table, th, td {
 
         st.markdown(html_table, unsafe_allow_html=True)
 
-        # --- EXPORT CSV ---
         export_df = df.copy()
         export_df["Events"] = export_df["Events"].astype(str).str.replace("<br>", ", ")
 
