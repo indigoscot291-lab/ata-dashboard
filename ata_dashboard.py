@@ -1151,7 +1151,7 @@ elif page_choice == "Historical Titles":
                 st.warning("No results found for that competitor.")
 # --- PAGE: State & World Qualifiers (All Divisions) ---
 if page_choice == "State & World Qualifiers (All Divisions)":
-    st.title("State Champs, District & World Qualifiers — All Divisions")
+    st.title("State & World Qualifiers — All Divisions")
 
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
@@ -1266,6 +1266,7 @@ if page_choice == "State & World Qualifiers (All Divisions)":
 
                 for event_name, entries in ranked.items():
                     for e in entries:
+
                         # --- LOCATION PARSING ---
                         loc = e["Location"].strip()
                         loc_norm = loc.replace(", ", ",").replace(" ,", ",")
@@ -1290,9 +1291,10 @@ if page_choice == "State & World Qualifiers (All Divisions)":
                         else:
                             st_abbrev2 = region_part.replace(".", "").strip().upper()
 
-                        # District qualifiers: enforce state match
-                        if report_type == "District / World Qualifiers (Top 10)" and "District" in qualifier_type:
-                            if st_abbrev2 != state_abbrev.upper():
+                        # --- DISTRICT FILTER (correct) ---
+                        if "District" in qualifier_type:
+                            allowed_states = DISTRICT_MAP.get(state_choice, [])
+                            if st_abbrev2 not in allowed_states:
                                 continue
 
                         # Town filter
@@ -1353,6 +1355,7 @@ if page_choice == "State & World Qualifiers (All Divisions)":
 
                 for event_name, entries in ranked.items():
                     for e in entries:
+
                         # --- LOCATION PARSING ---
                         loc = e["Location"].strip()
                         loc_norm = loc.replace(", ", ",").replace(" ,", ",")
@@ -1376,6 +1379,11 @@ if page_choice == "State & World Qualifiers (All Divisions)":
                             st_abbrev2 = PROVINCE_NAME_TO_ABBREV[region_part.title()]
                         else:
                             st_abbrev2 = region_part.replace(".", "").strip().upper()
+
+                        # --- DISTRICT FILTER (correct) ---
+                        allowed_states = DISTRICT_MAP.get(district_choice, [])
+                        if st_abbrev2 not in allowed_states:
+                            continue
 
                         if e["Rank"] > 10:
                             continue
