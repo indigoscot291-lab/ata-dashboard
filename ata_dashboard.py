@@ -435,6 +435,9 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
                 total_rows = sum(len(v) for v in state_data.values())
                 st.write("DEBUG: parse_standings events:", list(state_data.keys()))
                 st.write("DEBUG: parse_standings total rows:", total_rows)
+                # 🔴 THIS is what was effectively removed before
+                for ev, entries in state_data.items():
+                    combined[ev].extend(entries)
             except Exception as e:
                 st.write("DEBUG: parse_standings ERROR:", repr(e))
 
