@@ -360,6 +360,8 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         else:
             # US states use normal URL
             url = group["state_url_template"].format(country, state_code, group["code"])
+        
+        print("The URL is", state_url_template)    
 
         html = fetch_html(url)
         if html:
@@ -1403,7 +1405,6 @@ if page_choice == "State & World Qualifiers (All Divisions)":
                 else:
                     url = div_info["state_url_template"].format(country, state_abbrev, code)
 
-                print("The URL is", state_url_template)
                 html = fetch_html_v2(url)
                 if not isinstance(html, str) or not html.strip():
                     st.warning(f"Skipping {div_name} / {state_abbrev} — invalid HTML returned for URL: {url}")
