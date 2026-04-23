@@ -301,12 +301,19 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
     combined = {ev: [] for ev in EVENT_NAMES}
 
+    # Determine which regions to fetch
     regions_to_fetch = []
     if district_choice:
-        states_in_district = district_df.loc[district_df['District']==district_choice, 'States and Provinces'].iloc[0]
+        states_in_district = district_df.loc[
+            district_df['District'] == district_choice,
+            'States and Provinces'
+        ].iloc[0]
         regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
+
+        # If user selected a specific region, override
         if region_choice:
             regions_to_fetch = [region_choice]
+
     else:
         if region_choice not in ["All", "International"]:
             regions_to_fetch = [region_choice]
@@ -331,13 +338,18 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
 
         # --- CANADA URL FIX ---
         if country == "CA":
+            # Lowercase province code
             state_code_for_url = state_code.lower()
+
+            # Full province name (region is already the full name)
             region_param = region.replace(" ", "+")
+
             url = (
                 f"{group['state_url_template'].format(country, state_code_for_url, group['code'])}"
                 f"&region={region_param}"
             )
         else:
+            # US states use normal URL
             url = group["state_url_template"].format(country, state_code, group["code"])
 
         html = fetch_html(url)
@@ -351,12 +363,14 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
+                # Keep entries that do NOT end with ", XX"
                 if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
                     intl[ev].append(e)
         combined = intl
 
     has_any = any(len(lst) > 0 for lst in combined.values())
     return combined, has_any
+
 
 
 def dedupe_and_rank(event_data: dict):
