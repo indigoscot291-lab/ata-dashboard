@@ -315,23 +315,38 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         elif region_choice == "International":
             regions_to_fetch = []
 
+    # WORLD DATA
     world_html = fetch_html(group["world_url"])
     if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
 
+    # STATE / PROVINCE DATA
     for region in regions_to_fetch:
         if region not in REGION_CODES:
             continue
+
         country, state_code = REGION_CODES[region]
-        url = group["state_url_template"].format(country, state_code, group["code"])
+
+        # --- CANADA URL FIX ---
+        if country == "CA":
+            state_code_for_url = state_code.lower()
+            region_param = region.replace(" ", "+")
+            url = (
+                f"{group['state_url_template'].format(country, state_code_for_url, group['code'])}"
+                f"&region={region_param}"
+            )
+        else:
+            url = group["state_url_template"].format(country, state_code, group["code"])
+
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
 
+    # INTERNATIONAL FILTER
     if region_choice == "International":
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
@@ -342,6 +357,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
 
     has_any = any(len(lst) > 0 for lst in combined.values())
     return combined, has_any
+
 
 def dedupe_and_rank(event_data: dict):
     clean = {}
