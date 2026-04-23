@@ -310,6 +310,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         ].iloc[0]
         regions_to_fetch = [s.strip() for s in states_in_district.split(',')]
 
+        # If user selected a specific region, override
         if region_choice:
             regions_to_fetch = [region_choice]
 
@@ -331,29 +332,33 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     # STATE / PROVINCE DATA
     for region in regions_to_fetch:
 
-        # --- FIX: region must be the FULL province/state name ---
-        # If region is an abbreviation (BC, ON, QC), convert it
+        # --- FIX 1: Convert abbreviations (BC, ON, QC) → full province name ---
         if region not in REGION_CODES:
-            # reverse lookup: abbrev → full name
             for full_name, (country_tmp, abbrev_tmp) in REGION_CODES.items():
                 if region.upper() == abbrev_tmp.upper():
                     region = full_name
                     break
 
+        # If still not valid, skip
         if region not in REGION_CODES:
             continue
 
         country, state_code = REGION_CODES[region]
 
-        # --- CANADA URL FIX ---
+        # --- FIX 2 & 3: Correct Canadian URL format ---
         if country == "CA":
+            # Lowercase province code
             state_code_for_url = state_code.lower()
+
+            # Full province name for region=
             region_param = region.replace(" ", "+")
+
             url = (
                 f"{group['state_url_template'].format(country, state_code_for_url, group['code'])}"
                 f"&region={region_param}"
             )
         else:
+            # US states use normal URL
             url = group["state_url_template"].format(country, state_code, group["code"])
 
         html = fetch_html(url)
@@ -367,6 +372,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         intl = {ev: [] for ev in EVENT_NAMES}
         for ev, entries in combined.items():
             for e in entries:
+                # Keep entries that do NOT end with ", XX"
                 if not re.search(r",\s*[A-Z]{2}$", e["Location"]):
                     intl[ev].append(e)
         combined = intl
