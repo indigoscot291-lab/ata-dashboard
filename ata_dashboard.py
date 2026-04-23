@@ -1246,6 +1246,7 @@ if page_choice == "State & World Qualifiers (All Divisions)":
             "State Champions (Rank 1 + ties)",
         ]:
             country, state_abbrev = REGION_CODES[state_choice]
+            state_full_name = state_choice  # needed for Canada region=
 
             for div_name, div_info in MATRIX_GROUPS.items():
                 code = div_info["code"]
@@ -1254,7 +1255,16 @@ if page_choice == "State & World Qualifiers (All Divisions)":
                 if report_type == "District / World Qualifiers (Top 10)" and "World" in qualifier_type:
                     url = div_info["world_url"]
                 else:
-                    url = div_info["state_url_template"].format(country, state_abbrev, code)
+                    # --- CANADA URL FIX ---
+                    if country == "CA":
+                        state_code_for_url = state_abbrev.lower()
+                        region_param = state_full_name.replace(" ", "+")
+                        url = (
+                            f"{div_info['state_url_template'].format(country, state_code_for_url, code)}"
+                            f"&region={region_param}"
+                        )
+                    else:
+                        url = div_info["state_url_template"].format(country, state_abbrev, code)
 
                 html = fetch_html_v2(url)
                 if not isinstance(html, str) or not html.strip():
@@ -1341,9 +1351,18 @@ if page_choice == "State & World Qualifiers (All Divisions)":
             for state_abbrev in DISTRICT_MAP.get(district_choice, []):
                 if state_abbrev not in abbrev_to_country:
                     continue
-                country, state_name = abbrev_to_country[state_abbrev]
+                country, state_full_name = abbrev_to_country[state_abbrev]
 
-                url = div_info["state_url_template"].format(country, state_abbrev, code)
+                # --- CANADA URL FIX ---
+                if country == "CA":
+                    state_code_for_url = state_abbrev.lower()
+                    region_param = state_full_name.replace(" ", "+")
+                    url = (
+                        f"{div_info['state_url_template'].format(country, state_code_for_url, code)}"
+                        f"&region={region_param}"
+                    )
+                else:
+                    url = div_info["state_url_template"].format(country, state_abbrev, code)
 
                 html = fetch_html_v2(url)
                 if not isinstance(html, str) or not html.strip():
@@ -1380,7 +1399,7 @@ if page_choice == "State & World Qualifiers (All Divisions)":
                         else:
                             st_abbrev2 = region_part.replace(".", "").strip().upper()
 
-                        # --- DISTRICT FILTER (correct) ---
+                        # --- DISTRICT FILTER ---
                         allowed_states = DISTRICT_MAP.get(district_choice, [])
                         if st_abbrev2 not in allowed_states:
                             continue
