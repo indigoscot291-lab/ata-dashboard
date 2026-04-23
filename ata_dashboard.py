@@ -268,34 +268,87 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
 def parse_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
+
+    # Province name → abbreviation
+    PROVINCE_NAME_TO_ABBREV = {
+        "Alberta": "AB",
+        "British Columbia": "BC",
+        "Manitoba": "MB",
+        "New Brunswick": "NB",
+        "Newfoundland and Labrador": "NL",
+        "Nova Scotia": "NS",
+        "Ontario": "ON",
+        "Prince Edward Island": "PE",
+        "Quebec": "QC",
+        "Saskatchewan": "SK",
+    }
+
     headers = soup.find_all("ul", class_="tournament-header")
     tables = soup.find_all("table")
+
     for header, table in zip(headers, tables):
         evt = header.find("span", class_="text-primary text-uppercase")
         if not evt:
             continue
+
         ev_name = evt.get_text(strip=True)
         if ev_name not in EVENT_NAMES:
             continue
+
         tbody = table.find("tbody")
         if not tbody:
             continue
+
         for tr in tbody.find_all("tr"):
             cols = [td.get_text(strip=True) for td in tr.find_all("td")]
-            if len(cols) == 4 and all(cols):
-                rank_s, name, pts_s, loc = cols
-                try:
-                    pts_val = int(pts_s)
-                except:
-                    continue
-                if pts_val > 0:
-                    data[ev_name].append({
-                        "Rank": int(rank_s),
-                        "Name": name.strip(),
-                        "Points": pts_val,
-                        "Location": loc.strip()
-                    })
+            if len(cols) != 4:
+                continue
+
+            rank_s, name, pts_s, loc = cols
+
+            try:
+                pts_val = int(pts_s)
+            except:
+                continue
+
+            if pts_val <= 0:
+                continue
+
+            # --- FIX: Proper location parsing for Canada ---
+            loc = loc.strip()
+            loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+
+            if "," in loc_norm:
+                town, region_part = loc_norm.split(",", 1)
+            else:
+                parts = loc_norm.split()
+                if len(parts) > 1:
+                    town = " ".join(parts[:-1])
+                    region_part = parts[-1]
+                else:
+                    town = loc_norm
+                    region_part = ""
+
+            town = town.strip()
+            region_part = region_part.strip()
+
+            # Convert province names → abbreviations
+            if region_part.title() in PROVINCE_NAME_TO_ABBREV:
+                state_abbrev = PROVINCE_NAME_TO_ABBREV[region_part.title()]
+            else:
+                state_abbrev = region_part.replace(".", "").strip().upper()
+
+            data[ev_name].append({
+                "Rank": int(rank_s),
+                "Name": name.strip(),
+                "Points": pts_val,
+                "Town": town,
+                "State": state_abbrev,
+                "Location": loc.strip()
+            })
+
     return data
+
 
 def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
