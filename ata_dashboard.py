@@ -359,10 +359,10 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             )
         else:
             # US states use normal URL
-            url = group["state_url_template"].format(country, state_code, group["code"])
+            url = group["state_url_template"].format(country, state_code, group["code"])    
+        # DEBUG
+        st.write("DEBUG URL:", url)
         
-        print("The URL is", state_url_template)    
-
         html = fetch_html(url)
         if html:
             state_data = parse_standings(html)
@@ -381,8 +381,6 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
 
     has_any = any(len(lst) > 0 for lst in combined.values())
     return combined, has_any
-
-
 
 def dedupe_and_rank(event_data: dict):
     clean = {}
