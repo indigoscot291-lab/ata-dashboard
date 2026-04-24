@@ -519,7 +519,7 @@ page_choice = st.selectbox(
         "1st Degree Black Belt Women 50-59",
         "National & District Rings",
         "Historical Titles",
-        "State & World Qualifiers (All Divisions)"
+        "State Champions, District & World Qualifiers (All Divisions)"
         "Team Sparring"
 #        "Competitor Search"
     ]
@@ -1261,9 +1261,9 @@ elif page_choice == "Historical Titles":
                 st.dataframe(combined, use_container_width=True, hide_index=True)
             else:
                 st.warning("No results found for that competitor.")
-# --- PAGE: State & World Qualifiers (All Divisions) ---
-if page_choice == "State & World Qualifiers (All Divisions)":
-    st.title("State & World Qualifiers — All Divisions")
+# --- PAGE: State Champions, District & World Qualifiers (All Divisions) ---
+if page_choice == "State Champions, District & World Qualifiers (All Divisions)":
+    st.title("State Champions, District & World Qualifiers — All Divisions")
 
     if not MATRIX_GROUPS:
         st.error("No divisions loaded from the Matrix spreadsheet.")
@@ -1645,8 +1645,8 @@ table, th, td {
             file_name="qualifiers.csv",
             mime="text/csv"
         )
-elif page_choice == "Team Sparring & Combat":
-    st.title("Team Sparring & Team Combat")
+elif page_choice == "Team Sparring":
+    st.title("Team Sparring")
 
     event_choice = st.selectbox(
         "Select Team Event:",
