@@ -519,7 +519,7 @@ page_choice = st.selectbox(
         "1st Degree Black Belt Women 50-59",
         "National & District Rings",
         "Historical Titles",
-        "State Champions, District & World Qualifiers (All Divisions)"
+        "State Champions, District & World Qualifiers (All Divisions)",
         "Team Sparring"
 #        "Competitor Search"
     ]
