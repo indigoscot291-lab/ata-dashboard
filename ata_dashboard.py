@@ -520,6 +520,7 @@ page_choice = st.selectbox(
         "National & District Rings",
         "Historical Titles",
         "State & World Qualifiers (All Divisions)"
+        "Team Sparring"
 #        "Competitor Search"
     ]
 )
@@ -1644,3 +1645,38 @@ table, th, td {
             file_name="qualifiers.csv",
             mime="text/csv"
         )
+elif page_choice == "Team Sparring & Combat":
+    st.title("Team Sparring & Team Combat")
+
+    event_choice = st.selectbox(
+        "Select Team Event:",
+        ["Team Sparring"],  # you can add Team Combat later
+    )
+
+    div_choice = st.selectbox(
+        "Select Division:",
+        list(TEAM_SPAR_RING_PDFS.keys())
+    )
+
+    if st.button("Load Team Standings"):
+        url = TEAM_SPAR_RING_PDFS[div_choice]
+        with st.spinner("Loading team standings from PDF..."):
+            df = load_team_pdf(url)
+
+        if df.empty:
+            st.warning("No table data found in this PDF (or parsing needs tuning).")
+        else:
+            # basic tidy display
+            display_cols = []
+            for c in ["Rank", "Team", "Location", "Points"]:
+                if c in df.columns:
+                    display_cols.append(c)
+            if not display_cols:
+                display_cols = df.columns
+
+            st.dataframe(
+                df[display_cols].reset_index(drop=True),
+                use_container_width=True,
+                hide_index=True
+            )
+        
