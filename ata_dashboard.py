@@ -1648,25 +1648,26 @@ table, th, td {
 elif page_choice == "Team Sparring":
     st.title("Team Sparring")
 
+    st.caption("Currently wired for Team Sparring PDFs from ATA; Team Combat can be added in the same pattern.")
+
     event_choice = st.selectbox(
         "Select Team Event:",
-        ["Team Sparring"],  # you can add Team Combat later
+        ["Team Sparring"],  # placeholder for future "Team Combat"
     )
 
     div_choice = st.selectbox(
         "Select Division:",
-        list(TEAM_SPAR_RING_PDFS.keys())
+        list(TEAM_SPARRING_PDFS.keys())
     )
 
     if st.button("Load Team Standings"):
-        url = TEAM_SPAR_RING_PDFS[div_choice]
+        url = TEAM_SPARRING_PDFS[div_choice]
         with st.spinner("Loading team standings from PDF..."):
-            df = load_team_pdf(url)
+            df = load_team_sparring_pdf(url)
 
         if df.empty:
-            st.warning("No table data found in this PDF (or parsing needs tuning).")
+            st.warning("No usable table data found in this PDF (or parsing needs tuning).")
         else:
-            # basic tidy display
             display_cols = []
             for c in ["Rank", "Team", "Location", "Points"]:
                 if c in df.columns:
@@ -1674,9 +1675,9 @@ elif page_choice == "Team Sparring":
             if not display_cols:
                 display_cols = df.columns
 
+            st.subheader(f"{event_choice} — {div_choice}")
             st.dataframe(
                 df[display_cols].reset_index(drop=True),
                 use_container_width=True,
                 hide_index=True
             )
-        
