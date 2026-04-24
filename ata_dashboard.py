@@ -259,52 +259,53 @@ def load_team_sparring_pdf(url: str) -> pd.DataFrame:
         r = requests.get(url, timeout=20)
         r.raise_for_status()
 
-        rows = []
+        text_lines = []
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
             for page in pdf.pages:
-                tables = page.extract_tables()
-                for tbl in tables:
-                    for row in tbl:
-                        if not row:
-                            continue
-                        # require at least 3 non-empty cells
-                        non_empty = [c for c in row if c and str(c).strip()]
-                        if len(non_empty) >= 3:
-                            rows.append(row)
+                txt = page.extract_text()
+                if txt:
+                    for line in txt.split("\n"):
+                        text_lines.append(line.strip())
 
-        if not rows:
-            return pd.DataFrame()
+        # Now parse lines that look like: Rank  Team  Points  Location
+        rows = []
+        for line in text_lines:
+            # crude pattern: number ... number ... state
+            parts = line.split()
+            if len(parts) < 4:
+                continue
 
-        header = [str(c).strip() if c else "" for c in rows[0]]
-        data_rows = rows[1:]
+            # first token must be rank
+            if not parts[0].isdigit():
+                continue
 
-        df = pd.DataFrame(data_rows, columns=header)
+            rank = int(parts[0])
 
-        # normalize likely columns
-        col_map = {}
-        for c in df.columns:
-            lc = c.lower()
-            if "rank" in lc or "place" in lc:
-                col_map[c] = "Rank"
-            elif "team" in lc:
-                col_map[c] = "Team"
-            elif "point" in lc:
-                col_map[c] = "Points"
-            elif "state" in lc or "location" in lc:
-                col_map[c] = "Location"
+            # last token is state abbreviation or full name
+            location = parts[-1]
 
-        df = df.rename(columns=col_map)
+            # second-to-last token is points
+            if not parts[-2].isdigit():
+                continue
 
-        if "Points" in df.columns:
-            df["Points"] = pd.to_numeric(df["Points"], errors="coerce")
-        if "Rank" in df.columns:
-            df["Rank"] = pd.to_numeric(df["Rank"], errors="coerce")
+            points = int(parts[-2])
 
-        return df
+            # everything in the middle is team name
+            team = " ".join(parts[1:-2])
+
+            rows.append({
+                "Rank": rank,
+                "Team": team,
+                "Points": points,
+                "Location": location
+            })
+
+        return pd.DataFrame(rows)
 
     except Exception as e:
         st.error(f"Failed to load team sparring PDF: {e}")
         return pd.DataFrame()
+
 
 import requests
 from bs4 import BeautifulSoup
