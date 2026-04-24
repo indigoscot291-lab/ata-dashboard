@@ -414,32 +414,32 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             # US states use normal URL
             url = group["state_url_template"].format(country, state_code, group["code"])    
         # DEBUG
-        st.write("DEBUG URL:", url)
+        #st.write("DEBUG URL:", url)
         
-        #html = fetch_html(url)
-        #if html:
-         #   state_data = parse_standings(html)
-          #  for ev, entries in state_data.items():
-           #     combined[ev].extend(entries)
-        st.write("DEBUG: about to fetch", url)
-        html = None
-        try:
-            html = fetch_html(url)
-            st.write("DEBUG: fetch_html returned", "None" if html is None else f"len={len(html)}")
-        except Exception as e:
-            st.write("DEBUG: fetch_html ERROR:", repr(e))
-
+        html = fetch_html(url)
         if html:
-            try:
-                state_data = parse_standings(html)
-                total_rows = sum(len(v) for v in state_data.values())
-                st.write("DEBUG: parse_standings events:", list(state_data.keys()))
-                st.write("DEBUG: parse_standings total rows:", total_rows)
+            state_data = parse_standings(html)
+            for ev, entries in state_data.items():
+                combined[ev].extend(entries)
+        st.write("DEBUG: about to fetch", url)
+        #html = None
+        #try:
+         #   html = fetch_html(url)
+          #  st.write("DEBUG: fetch_html returned", "None" if html is None else f"len={len(html)}")
+        #except Exception as e:
+         #   st.write("DEBUG: fetch_html ERROR:", repr(e))
+
+        #if html:
+         #   try:
+          #      state_data = parse_standings(html)
+           #     total_rows = sum(len(v) for v in state_data.values())
+            #    st.write("DEBUG: parse_standings events:", list(state_data.keys()))
+             #   st.write("DEBUG: parse_standings total rows:", total_rows)
                 # 🔴 THIS is what was effectively removed before
-                for ev, entries in state_data.items():
-                    combined[ev].extend(entries)
-            except Exception as e:
-                st.write("DEBUG: parse_standings ERROR:", repr(e))
+              #  for ev, entries in state_data.items():
+               #     combined[ev].extend(entries)
+            #except Exception as e:
+             #   st.write("DEBUG: parse_standings ERROR:", repr(e))
 
     # INTERNATIONAL FILTER
     if region_choice == "International":
