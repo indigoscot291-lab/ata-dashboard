@@ -65,6 +65,21 @@ REGION_CODES = {
     "Prince Edward Island": ("CA", "PE"), "Quebec": ("CA", "QC"), "Saskatchewan": ("CA", "SK")
 }
 
+# --- TEAM SPARRING CONFIG ---
+
+TEAM_SPARRING_PDFS = {
+    "Bantam State": "https://atamartialarts.com/media/zvlpk5lo/sn-bantam-state.pdf",
+    "Rookie State": "https://atamartialarts.com/media/tszdwsic/sn-rookie-state.pdf",
+    "JV State": "https://atamartialarts.com/media/hkpd3cl5/sn-jv-state.pdf",
+    "Varsity State": "https://atamartialarts.com/media/cgxbkzx2/sn-varsity-state.pdf",
+    "Elite State": "https://atamartialarts.com/media/2x0d3vsr/sn-elite-state.pdf",
+    "Premier State": "https://atamartialarts.com/media/m5ukxejm/sn-premier-state.pdf",
+    "Legends State": "https://atamartialarts.com/media/a2ypu3if/sn-legends-state.pdf",
+    "Executive State": "https://atamartialarts.com/media/sayltmg1/sn-executive-state.pdf",
+    "World / Nationals": "https://atamartialarts.com/media/1khnmd0d/sn-world.pdf",
+}
+
+
 REGIONS = ["All"] + list(REGION_CODES.keys()) + ["International"]
 
 DISTRICT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1SJqPP3N7n4yyM8_heKe7Amv7u8mZw-T5RKN4OmBOi4I/export?format=csv"
@@ -236,6 +251,60 @@ def normalize_town(t: str) -> str:
          .strip()
     )
 
+import pdfplumber
+
+@st.cache_data(ttl=3600)
+def load_team_sparring_pdf(url: str) -> pd.DataFrame:
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+
+        rows = []
+        with pdfplumber.open(io.BytesIO(r.content)) as pdf:
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for tbl in tables:
+                    for row in tbl:
+                        if not row:
+                            continue
+                        # require at least 3 non-empty cells
+                        non_empty = [c for c in row if c and str(c).strip()]
+                        if len(non_empty) >= 3:
+                            rows.append(row)
+
+        if not rows:
+            return pd.DataFrame()
+
+        header = [str(c).strip() if c else "" for c in rows[0]]
+        data_rows = rows[1:]
+
+        df = pd.DataFrame(data_rows, columns=header)
+
+        # normalize likely columns
+        col_map = {}
+        for c in df.columns:
+            lc = c.lower()
+            if "rank" in lc or "place" in lc:
+                col_map[c] = "Rank"
+            elif "team" in lc:
+                col_map[c] = "Team"
+            elif "point" in lc:
+                col_map[c] = "Points"
+            elif "state" in lc or "location" in lc:
+                col_map[c] = "Location"
+
+        df = df.rename(columns=col_map)
+
+        if "Points" in df.columns:
+            df["Points"] = pd.to_numeric(df["Points"], errors="coerce")
+        if "Rank" in df.columns:
+            df["Rank"] = pd.to_numeric(df["Rank"], errors="coerce")
+
+        return df
+
+    except Exception as e:
+        st.error(f"Failed to load team sparring PDF: {e}")
+        return pd.DataFrame()
 
 import requests
 from bs4 import BeautifulSoup
