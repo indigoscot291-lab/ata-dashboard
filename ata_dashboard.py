@@ -491,7 +491,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
-        st.write("DEBUG: about to fetch", url)
+        #st.write("DEBUG: about to fetch", url)
         #html = None
         #try:
          #   html = fetch_html(url)
@@ -590,7 +590,7 @@ page_choice = st.selectbox(
         "National & District Rings",
         "Historical Titles",
         "State Champions, District & World Qualifiers (All Divisions)",
-        "Team Sparring"
+ #       "Team Sparring"
 #        "Competitor Search"
     ]
 )
