@@ -1701,7 +1701,8 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                             st_abbrev2 = region_part.replace(".", "").strip().upper()
 
                         # --- DISTRICT FILTER (correct) ---
-                        if "District" in qualifier_type:
+                        #if "District" in qualifier_type:
+                        if qualifier_type == "District-wide":    
                             allowed_states = DISTRICT_MAP.get(state_choice, [])
                             if st_abbrev2 not in allowed_states:
                                 continue
