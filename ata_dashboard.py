@@ -1902,13 +1902,22 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
     if "qual_df_all_divisions" in st.session_state:
         df = st.session_state["qual_df_all_divisions"]
         report_type = st.session_state.get("qual_report_type", "")
+        
+        df_no_summary = df[~df["Name"].str.startswith("Number of qualifiers:")]
 
         if report_type == "State Champions (Rank 1 + ties)":
-            st.success(f"Found {len(df)} state champions.")
+            st.success(f"Found {len(df_no_summary)} state champions.")
         elif report_type == "District-wide Qualifiers (Top 10 in District)":
-            st.success(f"Found {len(df)} district-wide qualifiers.")
+            st.success(f"Found {len(df_no_summary)} district-wide qualifiers.")
         else:
-            st.success(f"Found {len(df)} qualifiers.")
+            st.success(f"Found {len(df_no_summary)} qualifiers.")
+    
+        #if report_type == "State Champions (Rank 1 + ties)":
+        #    st.success(f"Found {len(df)} state champions.")
+        #elif report_type == "District-wide Qualifiers (Top 10 in District)":
+        #    st.success(f"Found {len(df)} district-wide qualifiers.")
+        #else:
+        #    st.success(f"Found {len(df)} qualifiers.")
 
         display_df = df.copy()
 
