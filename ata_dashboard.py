@@ -1639,13 +1639,15 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
             "Saskatchewan": "SK",
         }
 
-        # --- MODE 1 & 2: STATE-BASED ---
+        # ============================================================
+        #   MODE 1 & 2 — STATE-BASED
+        # ============================================================
         if report_type in [
             "District / World Qualifiers (Top 10)",
             "State Champions (Rank 1 + ties)",
         ]:
             country, state_abbrev = REGION_CODES[state_choice]
-            state_full_name = state_choice  # needed for Canada region=
+            state_full_name = state_choice
 
             for div_name, div_info in MATRIX_GROUPS.items():
                 code = div_info["code"]
@@ -1654,7 +1656,6 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                 if report_type == "District / World Qualifiers (Top 10)" and "World" in qualifier_type:
                     url = div_info["world_url"]
                 else:
-                    # --- CANADA URL FIX ---
                     if country == "CA":
                         state_code_for_url = state_abbrev.lower()
                         region_param = state_full_name.replace(" ", "+")
@@ -1700,9 +1701,8 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                         else:
                             st_abbrev2 = region_part.replace(".", "").strip().upper()
 
-                        # --- DISTRICT FILTER (correct) ---
-                        #if "District" in qualifier_type:
-                        if qualifier_type == "District-wide":    
+                        # --- DISTRICT FILTER (ONLY for District-wide) ---
+                        if qualifier_type == "District-wide":
                             allowed_states = DISTRICT_MAP.get(state_choice, [])
                             if st_abbrev2 not in allowed_states:
                                 continue
@@ -1741,8 +1741,9 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                     r for r in results
                     if r["Rank"] == min_rank_by_event.get(r["Event"], r["Rank"])
                 ]
-
-        # --- MODE 3: DISTRICT-WIDE ---
+        # ============================================================
+        #   MODE 3 — DISTRICT-WIDE (NEW FORMAT)
+        # ============================================================
         else:
             div_name = division_choice
             div_info = MATRIX_GROUPS[div_name]
@@ -1804,6 +1805,7 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                         if st_abbrev2 not in allowed_states:
                             continue
 
+                        # Top 10 filter
                         if e["Rank"] > 10:
                             continue
 
@@ -1818,91 +1820,195 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                             "Code": code,
                         })
 
-        # --- NO RESULTS ---
+        # ============================================================
+        #   NO RESULTS
+        # ============================================================
         if not results:
             st.session_state.pop("qual_df_all_divisions", None)
             st.warning("No qualifiers found for the selected filters.")
-        else:
-            # --- COLLATE RESULTS ---
-            collated = {}
+            return
 
+        # ============================================================
+        #   DISTRICT-WIDE OUTPUT (NEW FORMAT)
+        # ============================================================
+        if report_type == "District-wide Qualifiers (Top 10 in District)":
+
+            # --- COLLATE ---
+            collated = {}
             for row in results:
-                key = (row["Name"], row["Town"], row["State"], row["Division"])
+                key = (row["Name"], row["Town"], row["State"])
                 if key not in collated:
                     collated[key] = {
                         "Name": row["Name"],
-                        "Town": row["Town"],
-                        "State": row["State"],
-                        "Division": row["Division"],
-                        "Events": [],
+                        "Events": set(),
                     }
-                collated[key]["Events"].append(row["Event"])
+                collated[key]["Events"].add(row["Event"])
 
-            EVENT_ORDER = {
-                "Forms": 1,
-                "Weapons": 2,
-                "Combat Weapons": 3,
-                "Sparring": 4,
-                "Creative Forms": 5,
-                "Creative Weapons": 6,
-                "X-Treme Forms": 7,
-                "X-Treme Weapons": 8,
+            # --- NAME SPLITTER ---
+            def split_name(full):
+                parts = full.replace(",", "").split()
+                if len(parts) == 1:
+                    return "", parts[0]
+                return " ".join(parts[:-1]), parts[-1]
+
+            # --- EVENT CODE MAPS ---
+            TRADITIONAL_CODES = {
+                "Forms": "FORMS",
+                "Sparring": "SPARRING",
+                "Weapons": "WEAPONS",
+                "Combat Weapons": "COMBAT",
             }
 
-            final_rows = []
-            total_events = 0
+            CREATIVE_CODES = {
+                "Creative Forms": "ATA-CF",
+                "Creative Weapons": "ATA-CW",
+                "X-Treme Forms": "ATA-XF",
+                "X-Treme Weapons": "ATA-XW",
+            }
+
+            trad_rows = []
+            cx_rows = []
 
             for data in collated.values():
-                events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
-                data["Events"] = "<br>".join(events)
-                total_events += len(events)
-                final_rows.append(data)
+                first, last = split_name(data["Name"])
+                evs = data["Events"]
 
-            df = pd.DataFrame(final_rows)
+                trad_rows.append({
+                    "Last Name": last,
+                    "First Name": first,
+                    "Traditional Forms": TRADITIONAL_CODES["Forms"] if "Forms" in evs else "None",
+                    "Traditional Sparring": TRADITIONAL_CODES["Sparring"] if "Sparring" in evs else "None",
+                    "Traditional Weapons": TRADITIONAL_CODES["Weapons"] if "Weapons" in evs else "None",
+                    "Combat Weapons": TRADITIONAL_CODES["Combat Weapons"] if "Combat Weapons" in evs else "None",
+                })
 
-            # --- SORT BY LAST NAME ---
-            def extract_last_name(full):
-                parts = full.replace(",", "").split()
-                if len(parts) == 0:
-                    return ""
-                suffixes = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
-                if parts[-1].lower() in suffixes and len(parts) > 1:
-                    return parts[-2]
-                return parts[-1]
+                cx_rows.append({
+                    "Last Name": last,
+                    "First Name": first,
+                    "Creative Forms": CREATIVE_CODES["Creative Forms"] if "Creative Forms" in evs else "None",
+                    "Creative Weapons": CREATIVE_CODES["Creative Weapons"] if "Creative Weapons" in evs else "None",
+                    "Xtreme Forms": CREATIVE_CODES["X-Treme Forms"] if "X-Treme Forms" in evs else "None",
+                    "Xtreme Weapons": CREATIVE_CODES["X-Treme Weapons"] if "X-Treme Weapons" in evs else "None",
+                })
 
-            df["LastName"] = df["Name"].apply(extract_last_name)
-            df = df.sort_values(["LastName", "Name"]).reset_index(drop=True)
-            df = df.drop(columns=["LastName"])
+            trad_df = pd.DataFrame(trad_rows).sort_values(["Last Name", "First Name"])
+            cx_df = pd.DataFrame(cx_rows).sort_values(["Last Name", "First Name"])
 
-            # --- SUMMARY ROW ---
-            if report_type in [
-                "District / World Qualifiers (Top 10)",
-                "State Champions (Rank 1 + ties)",
-            ] and town_text:
-                summary_row = {
-                    "Name": f"Number of qualifiers: {len(df)}",
-                    "Town": "",
-                    "State": "",
-                    "Division": "",
-                    "Events": f"Number of events: {total_events}",
+            # --- GREY OUT "None" ---
+            def grey_none(val):
+                if val == "None":
+                    return "color: #999999;"
+                return ""
+
+            # --- DISPLAY ---
+            st.subheader("Traditional Events")
+            st.dataframe(
+                trad_df.style.applymap(grey_none),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.subheader("Creative & Xtreme Events")
+            st.dataframe(
+                cx_df.style.applymap(grey_none),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # --- EXPORTS ---
+            trad_csv = trad_df.to_csv(index=False).encode("utf-8")
+            cx_csv = cx_df.to_csv(index=False).encode("utf-8")
+
+            st.download_button("Download Traditional CSV", trad_csv, "district_traditional.csv")
+            st.download_button("Download Creative/Xtreme CSV", cx_csv, "district_creative_xtreme.csv")
+
+            return  # prevent state/world output from running
+
+        # ============================================================
+        #   STATE / WORLD OUTPUT (UNCHANGED)
+        # ============================================================
+        # --- COLLATE RESULTS ---
+        collated = {}
+
+        for row in results:
+            key = (row["Name"], row["Town"], row["State"], row["Division"])
+            if key not in collated:
+                collated[key] = {
+                    "Name": row["Name"],
+                    "Town": row["Town"],
+                    "State": row["State"],
+                    "Division": row["Division"],
+                    "Events": [],
                 }
-                df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
+            collated[key]["Events"].append(row["Event"])
 
-            # --- REMOVE TOWN/STATE IF FILTERED ---
-            if report_type in [
-                "District / World Qualifiers (Top 10)",
-                "State Champions (Rank 1 + ties)",
-            ] and town_text:
-                df = df.drop(columns=["Town", "State"])
+        EVENT_ORDER = {
+            "Forms": 1,
+            "Weapons": 2,
+            "Combat Weapons": 3,
+            "Sparring": 4,
+            "Creative Forms": 5,
+            "Creative Weapons": 6,
+            "X-Treme Forms": 7,
+            "X-Treme Weapons": 8,
+        }
 
-            st.session_state["qual_df_all_divisions"] = df
-            st.session_state["qual_report_type"] = report_type
+        final_rows = []
+        total_events = 0
 
-    # --- DISPLAY + EXPORT ---
+        for data in collated.values():
+            events = sorted(data["Events"], key=lambda e: EVENT_ORDER.get(e, 999))
+            data["Events"] = "<br>".join(events)
+            total_events += len(events)
+            final_rows.append(data)
+
+        df = pd.DataFrame(final_rows)
+
+        # --- SORT BY LAST NAME ---
+        def extract_last_name(full):
+            parts = full.replace(",", "").split()
+            if len(parts) == 0:
+                return ""
+            suffixes = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
+            if parts[-1].lower() in suffixes and len(parts) > 1:
+                return parts[-2]
+            return parts[-1]
+
+        df["LastName"] = df["Name"].apply(extract_last_name)
+        df = df.sort_values(["LastName", "Name"]).reset_index(drop=True)
+        df = df.drop(columns=["LastName"])
+
+        # --- SUMMARY ROW ---
+        if report_type in [
+            "District / World Qualifiers (Top 10)",
+            "State Champions (Rank 1 + ties)",
+        ] and town_text:
+            summary_row = {
+                "Name": f"Number of qualifiers: {len(df)}",
+                "Town": "",
+                "State": "",
+                "Division": "",
+                "Events": f"Number of events: {total_events}",
+            }
+            df = pd.concat([df, pd.DataFrame([summary_row])], ignore_index=True)
+
+        # --- REMOVE TOWN/STATE IF FILTERED ---
+        if report_type in [
+            "District / World Qualifiers (Top 10)",
+            "State Champions (Rank 1 + ties)",
+        ] and town_text:
+            df = df.drop(columns=["Town", "State"])
+
+        st.session_state["qual_df_all_divisions"] = df
+        st.session_state["qual_report_type"] = report_type
+
+    # ============================================================
+    #   DISPLAY + EXPORT
+    # ============================================================
     if "qual_df_all_divisions" in st.session_state:
         df = st.session_state["qual_df_all_divisions"]
         report_type = st.session_state.get("qual_report_type", "")
-        
+
         df_no_summary = df[~df["Name"].str.startswith("Number of qualifiers:")]
 
         if report_type == "State Champions (Rank 1 + ties)":
@@ -1911,13 +2017,6 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
             st.success(f"Found {len(df_no_summary)} district-wide qualifiers.")
         else:
             st.success(f"Found {len(df_no_summary)} qualifiers.")
-    
-        #if report_type == "State Champions (Rank 1 + ties)":
-        #    st.success(f"Found {len(df)} state champions.")
-        #elif report_type == "District-wide Qualifiers (Top 10 in District)":
-        #    st.success(f"Found {len(df)} district-wide qualifiers.")
-        #else:
-        #    st.success(f"Found {len(df)} qualifiers.")
 
         display_df = df.copy()
 
@@ -1932,16 +2031,8 @@ table, th, td {
         st.markdown(html_table, unsafe_allow_html=True)
 
         export_df = df.copy()
-        export_df["Events"] = export_df["Events"].astype(str).str.replace("<br>", ", ")
+        export_df["Events"] = export_df["Events"].astype(str).str.replace   
 
-        csv = export_df.to_csv(index=False).encode("utf-8")
-
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name="qualifiers.csv",
-            mime="text/csv"
-        )
 elif page_choice == "Team Sparring":
     st.title("Team Sparring")
 
