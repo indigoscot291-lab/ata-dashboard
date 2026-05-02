@@ -1923,7 +1923,8 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
             st.download_button("Download Traditional CSV", trad_csv, "district_traditional.csv")
             st.download_button("Download Creative/Xtreme CSV", cx_csv, "district_creative_xtreme.csv")
 
-            return  # prevent state/world output from running
+            st.stop()
+            #return  # prevent state/world output from running
 
         # ============================================================
         #   STATE / WORLD OUTPUT (UNCHANGED)
