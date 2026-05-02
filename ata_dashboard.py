@@ -1903,18 +1903,33 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
 
             # --- DISPLAY ---
             st.subheader("Traditional Events")
-            st.dataframe(
-                trad_df.style.applymap(grey_none),
-                use_container_width=True,
-                hide_index=True
-            )
+            try:
+                trad_styled = trad_df.style.applymap(grey_none)
+                st.dataframe(trad_styled, use_container_width=True, hide_index=True)
+            except Exception:
+                st.dataframe(trad_df, use_container_width=True, hide_index=True)
 
             st.subheader("Creative & Xtreme Events")
-            st.dataframe(
-                cx_df.style.applymap(grey_none),
-                use_container_width=True,
-                hide_index=True
-            )
+            try:
+                cx_styled = cx_df.style.applymap(grey_none)
+                st.dataframe(cx_styled, use_container_width=True, hide_index=True)
+            except Exception:
+                st.dataframe(cx_df, use_container_width=True, hide_index=True)
+            
+            # --- DISPLAY ---
+            #st.subheader("Traditional Events")
+            #st.dataframe(
+            #    trad_df.style.applymap(grey_none),
+             #   use_container_width=True,
+             #   hide_index=True
+            #)
+
+            #st.subheader("Creative & Xtreme Events")
+            #st.dataframe(
+             #   cx_df.style.applymap(grey_none),
+             #   use_container_width=True,
+             #   hide_index=True
+            #)
 
             # --- EXPORTS ---
             trad_csv = trad_df.to_csv(index=False).encode("utf-8")
