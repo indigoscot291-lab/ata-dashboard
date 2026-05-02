@@ -1891,6 +1891,28 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                     "Xtreme Forms": CREATIVE_CODES["X-Treme Forms"] if "X-Treme Forms" in evs else "None",
                     "Xtreme Weapons": CREATIVE_CODES["X-Treme Weapons"] if "X-Treme Weapons" in evs else "None",
                 })
+                # REMOVE competitors with no Traditional events
+                trad_rows = [
+                    row for row in trad_rows
+                    if not all(row[col] == "None" for col in [
+                        "Traditional Forms",
+                        "Traditional Sparring",
+                        "Traditional Weapons",
+                        "Combat Weapons"
+                    ])
+                ]                
+
+                # REMOVE competitors with no Creative/Xtreme events
+                cx_rows = [
+                    row for row in cx_rows
+                    if not all(row[col] == "None" for col in [
+                        "Creative Forms",
+                        "Creative Weapons",
+                        "Xtreme Forms",
+                        "Xtreme Weapons"
+                    ])
+                ]        
+
 
             trad_df = pd.DataFrame(trad_rows).sort_values(["Last Name", "First Name"])
             cx_df = pd.DataFrame(cx_rows).sort_values(["Last Name", "First Name"])
