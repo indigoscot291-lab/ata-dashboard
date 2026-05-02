@@ -1826,7 +1826,8 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
         if not results:
             st.session_state.pop("qual_df_all_divisions", None)
             st.warning("No qualifiers found for the selected filters.")
-            return
+            st.stop()
+            #return
 
         # ============================================================
         #   DISTRICT-WIDE OUTPUT (NEW FORMAT)
