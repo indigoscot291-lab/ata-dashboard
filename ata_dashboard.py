@@ -1741,6 +1741,7 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                     r for r in results
                     if r["Rank"] == min_rank_by_event.get(r["Event"], r["Rank"])
                 ]
+
         # ============================================================
         #   MODE 3 — DISTRICT-WIDE (NEW FORMAT)
         # ============================================================
@@ -1827,12 +1828,11 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
             st.session_state.pop("qual_df_all_divisions", None)
             st.warning("No qualifiers found for the selected filters.")
             st.stop()
-            #return
 
         # ============================================================
         #   DISTRICT-WIDE OUTPUT (NEW FORMAT)
         # ============================================================
-        if report_type == "District-wide Qualifiers (Top 10 in District)":
+        if "District-wide" in report_type:
 
             # --- COLLATE ---
             collated = {}
@@ -1924,7 +1924,6 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
             st.download_button("Download Creative/Xtreme CSV", cx_csv, "district_creative_xtreme.csv")
 
             st.stop()
-            #return  # prevent state/world output from running
 
         # ============================================================
         #   STATE / WORLD OUTPUT (UNCHANGED)
@@ -2033,7 +2032,17 @@ table, th, td {
         st.markdown(html_table, unsafe_allow_html=True)
 
         export_df = df.copy()
-        export_df["Events"] = export_df["Events"].astype(str).str.replace   
+        export_df["Events"] = export_df["Events"].astype(str).str.replace("<br>", ", ")
+
+        csv = export_df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="Download CSV",
+            data=csv,
+            file_name="qualifiers.csv",
+            mime="text/csv"
+        )
+  
 
 elif page_choice == "Team Sparring":
     st.title("Team Sparring")
