@@ -2014,7 +2014,7 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
 
         if report_type == "State Champions (Rank 1 + ties)":
             st.success(f"Found {len(df_no_summary)} state champions.")
-        elif report_type == "District-wide Qualifiers (Top 10 in District)":
+        elif "District-wide" in report_type:
             st.success(f"Found {len(df_no_summary)} district-wide qualifiers.")
         else:
             st.success(f"Found {len(df_no_summary)} qualifiers.")
@@ -2042,6 +2042,7 @@ table, th, td {
             file_name="qualifiers.csv",
             mime="text/csv"
         )
+
   
 
 elif page_choice == "Team Sparring":
