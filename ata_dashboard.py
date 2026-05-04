@@ -1773,6 +1773,19 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                 parsed = parse_multi_event_standings(html)
                 ranked = dedupe_and_rank(parsed)
 
+                # ============================================================
+                # DEBUG — SHOW EXACT EVENT RANKS FOR THIS DIVISION (STATE MODE)
+                # ============================================================
+                st.write(f"### DEBUG — Parsed Event Ranks for Division: {div_name}")
+                for debug_event, debug_entries in ranked.items():
+                    st.write(f"**Event:** {debug_event}")
+                    for de in debug_entries:
+                        st.write(
+                            f"- {de['Name']} | Rank: {de['Rank']} | Points: {de['Points']} | Location: {de['Location']}"
+                        )
+                st.write("---")
+                # ============================================================
+
                 for event_name, entries in ranked.items():
                     for e in entries:
 
@@ -1872,6 +1885,19 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
 
                 parsed = parse_multi_event_standings(html)
                 ranked = dedupe_and_rank(parsed)
+
+                # ============================================================
+                # DEBUG — SHOW EXACT EVENT RANKS FOR THIS DIVISION (DISTRICT MODE)
+                # ============================================================
+                st.write(f"### DEBUG — Parsed Event Ranks for Division: {div_name} / {state_abbrev}")
+                for debug_event, debug_entries in ranked.items():
+                    st.write(f"**Event:** {debug_event}")
+                    for de in debug_entries:
+                        st.write(
+                            f"- {de['Name']} | Rank: {de['Rank']} | Points: {de['Points']} | Location: {de['Location']}"
+                        )
+                st.write("---")
+                # ============================================================
 
                 for event_name, entries in ranked.items():
                     for e in entries:
@@ -2012,7 +2038,6 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                     ])
                 ]        
 
-
             trad_df = pd.DataFrame(trad_rows).sort_values(["Last Name", "First Name"])
             cx_df = pd.DataFrame(cx_rows).sort_values(["Last Name", "First Name"])
 
@@ -2036,21 +2061,6 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                 st.dataframe(cx_styled, use_container_width=True, hide_index=True)
             except Exception:
                 st.dataframe(cx_df, use_container_width=True, hide_index=True)
-            
-            # --- DISPLAY ---
-            #st.subheader("Traditional Events")
-            #st.dataframe(
-            #    trad_df.style.applymap(grey_none),
-             #   use_container_width=True,
-             #   hide_index=True
-            #)
-
-            #st.subheader("Creative & Xtreme Events")
-            #st.dataframe(
-             #   cx_df.style.applymap(grey_none),
-             #   use_container_width=True,
-             #   hide_index=True
-            #)
 
             # --- EXPORTS ---
             trad_csv = trad_df.to_csv(index=False).encode("utf-8")
