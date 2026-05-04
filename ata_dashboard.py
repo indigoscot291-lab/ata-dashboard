@@ -1841,18 +1841,32 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                         })
 
             # --- STATE CHAMPIONS FILTER (FIXED) ---
+            # --- STATE CHAMPIONS FILTER (CORRECT LOGIC) ---
             if report_type == "State Champions (Rank 1 + ties)" and results:
+
+                # Step 1: Determine true champions BEFORE town filtering
                 min_rank = {}
                 for r in results:
-                    key = (r["Division"], r["Event"])   # <-- FIX: include division
+                    key = (r["Division"], r["Event"])
                     rnk = r["Rank"]
                     if key not in min_rank or rnk < min_rank[key]:
                         min_rank[key] = rnk
 
-            results = [
-                r for r in results
-                if r["Rank"] == min_rank.get((r["Division"], r["Event"]), r["Rank"])
-            ]
+                # Step 2: Keep ONLY true champions (Rank 1)
+                true_champions = [
+                    r for r in results
+                    if r["Rank"] == min_rank.get((r["Division"], r["Event"]), None)
+                ]
+
+                # Step 3: NOW apply town filter (optional)
+                if town_text:
+                    true_champions = [
+                        r for r in true_champions
+                        if normalize_town(town_text) in normalize_town(r["Town"])
+                    ]
+
+                results = true_champions
+
     
             # --- STATE CHAMPIONS FILTER ---
             #if report_type == "State Champions (Rank 1 + ties)" and results:
