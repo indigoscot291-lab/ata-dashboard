@@ -1840,19 +1840,32 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                             "Code": code,
                         })
 
-            # --- STATE CHAMPIONS FILTER ---
+            # --- STATE CHAMPIONS FILTER (FIXED) ---
             if report_type == "State Champions (Rank 1 + ties)" and results:
-                min_rank_by_event = {}
+                min_rank = {}
                 for r in results:
-                    ev = r["Event"]
+                    key = (r["Division"], r["Event"])   # <-- FIX: include division
                     rnk = r["Rank"]
-                    if ev not in min_rank_by_event or rnk < min_rank_by_event[ev]:
-                        min_rank_by_event[ev] = rnk
+                    if key not in min_rank or rnk < min_rank[key]:
+                        min_rank[key] = rnk
 
-                results = [
-                    r for r in results
-                    if r["Rank"] == min_rank_by_event.get(r["Event"], r["Rank"])
-                ]
+            results = [
+                r for r in results
+                if r["Rank"] == min_rank.get((r["Division"], r["Event"]), r["Rank"])
+            ]
+    
+            # --- STATE CHAMPIONS FILTER ---
+            #if report_type == "State Champions (Rank 1 + ties)" and results:
+             #   min_rank_by_event = {}
+              ##     ev = r["Event"]
+                #    rnk = r["Rank"]
+                 #   if ev not in min_rank_by_event or rnk < min_rank_by_event[ev]:
+                  #      min_rank_by_event[ev] = rnk
+
+               # results = [
+                #    r for r in results
+                 #   if r["Rank"] == min_rank_by_event.get(r["Event"], r["Rank"])
+                #]
 
         # ============================================================
         #   MODE 3 — DISTRICT-WIDE (NEW FORMAT)
