@@ -173,6 +173,104 @@ def fetch_html_v2(url: str):
         return None
     return None
 
+def get_all_state_champions_all_states():
+    all_results = []
+
+    # Reverse lookup: abbrev → (country, state_name)
+    abbrev_to_country = {
+        abbrev: (country, state_name)
+        for state_name, (country, abbrev) in REGION_CODES.items()
+    }
+
+    PROVINCE_NAME_TO_ABBREV = {
+        "Alberta": "AB",
+        "British Columbia": "BC",
+        "Manitoba": "MB",
+        "New Brunswick": "NB",
+        "Newfoundland and Labrador": "NL",
+        "Nova Scotia": "NS",
+        "Ontario": "ON",
+        "Prince Edward Island": "PE",
+        "Quebec": "QC",
+        "Saskatchewan": "SK",
+    }
+
+    for state_full_name, (country, state_abbrev) in REGION_CODES.items():
+        for div_name, div_info in MATRIX_GROUPS.items():
+            code = div_info["code"]
+
+            if country == "CA":
+                state_code_for_url = state_abbrev.lower()
+                region_param = state_full_name.replace(" ", "+")
+                url = (
+                    f"{div_info['state_url_template'].format(country, state_code_for_url, code)}"
+                    f"&region={region_param}"
+                )
+            else:
+                url = div_info["state_url_template"].format(country, state_abbrev, code)
+
+            html = fetch_html_v2(url)
+            if not isinstance(html, str) or not html.strip():
+                continue
+
+            parsed = parse_multi_event_standings(html)
+            ranked = dedupe_and_rank(parsed)
+
+            temp_results = []
+            for event_name, entries in ranked.items():
+                for e in entries:
+                    loc = e["Location"].strip()
+                    loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+
+                    if "," in loc_norm:
+                        town, region_part = loc_norm.split(",", 1)
+                    else:
+                        parts = loc_norm.split()
+                        if len(parts) > 1:
+                            town = " ".join(parts[:-1])
+                            region_part = parts[-1]
+                        else:
+                            town = loc_norm
+                            region_part = ""
+
+                    town = town.strip()
+                    region_part = region_part.strip()
+
+                    if region_part.title() in PROVINCE_NAME_TO_ABBREV:
+                        st_abbrev2 = PROVINCE_NAME_TO_ABBREV[region_part.title()]
+                    else:
+                        st_abbrev2 = region_part.replace(".", "").strip().upper()
+
+                    temp_results.append({
+                        "Name": e["Name"],
+                        "Town": town,
+                        "State": st_abbrev2,
+                        "Event": event_name,
+                        "Rank": e["Rank"],
+                        "Points": e["Points"],
+                        "Division": div_name,
+                        "Code": code,
+                        "StateQueried": state_full_name,
+                    })
+
+            if temp_results:
+                min_rank_by_event = {}
+                for r in temp_results:
+                    ev = r["Event"]
+                    rnk = r["Rank"]
+                    if ev not in min_rank_by_event or rnk < min_rank_by_event[ev]:
+                        min_rank_by_event[ev] = rnk
+
+                champs = [
+                    r for r in temp_results
+                    if r["Rank"] == min_rank_by_event.get(r["Event"], r["Rank"])
+                ]
+
+                all_results.extend(champs)
+
+    return pd.DataFrame(all_results)
+
+
 # New parse for District and Worlds 
 def parse_multi_event_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
@@ -590,6 +688,7 @@ page_choice = st.selectbox(
         "National & District Rings",
         "Historical Titles",
         "State Champions, District & World Qualifiers (All Divisions)",
+        "Nationwide State Champions (All Divisions),
  #       "Team Sparring"
 #        "Competitor Search"
     ]
@@ -2118,3 +2217,21 @@ elif page_choice == "Team Sparring":
                 use_container_width=True,
                 hide_index=True
             )
+# --- PAGE: Nationwide State Champions (All Divisions) ---
+if page_choice == "Nationwide State Champions (All Divisions)":
+    st.title("Nationwide State Champions — All Divisions")
+
+    if st.button("Pull All State Champions (Nationwide)"):
+        st.info("Pulling ATA standings for ALL states and ALL divisions… this may take a moment.")
+
+        df = get_all_state_champions_all_states()
+
+        st.success(f"Found {len(df)} state champions nationwide.")
+        st.dataframe(df, use_container_width=True)
+
+        st.download_button(
+            "Download Nationwide State Champions CSV",
+            df.to_csv(index=False).encode("utf-8"),
+            "ATA_All_State_Champions.csv",
+            "text/csv"
+        )
