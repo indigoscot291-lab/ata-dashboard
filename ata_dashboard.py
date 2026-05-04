@@ -688,7 +688,7 @@ page_choice = st.selectbox(
         "National & District Rings",
         "Historical Titles",
         "State Champions, District & World Qualifiers (All Divisions)",
-        "Nationwide State Champions (All Divisions),
+        "Nationwide State Champions (All Divisions)",
  #       "Team Sparring"
 #        "Competitor Search"
     ]
