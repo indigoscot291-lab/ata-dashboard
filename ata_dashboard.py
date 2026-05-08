@@ -1776,14 +1776,14 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                 # ============================================================
                 # DEBUG — SHOW EXACT EVENT RANKS FOR THIS DIVISION (STATE MODE)
                 # ============================================================
-                st.write(f"### DEBUG — Parsed Event Ranks for Division: {div_name}")
-                for debug_event, debug_entries in ranked.items():
-                    st.write(f"**Event:** {debug_event}")
-                    for de in debug_entries:
-                        st.write(
-                            f"- {de['Name']} | Rank: {de['Rank']} | Points: {de['Points']} | Location: {de['Location']}"
-                        )
-                st.write("---")
+                #st.write(f"### DEBUG — Parsed Event Ranks for Division: {div_name}")
+                #for debug_event, debug_entries in ranked.items():
+                #    st.write(f"**Event:** {debug_event}")
+                #    for de in debug_entries:
+                #        st.write(
+                #            f"- {de['Name']} | Rank: {de['Rank']} | Points: {de['Points']} | Location: {de['Location']}"
+                #        )
+                #st.write("---")
                 # ============================================================
 
                 for event_name, entries in ranked.items():
