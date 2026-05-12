@@ -2062,8 +2062,21 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
                     ])
                 ]        
 
-            trad_df = pd.DataFrame(trad_rows).sort_values(["Last Name", "First Name"])
-            cx_df = pd.DataFrame(cx_rows).sort_values(["Last Name", "First Name"])
+            # Build DataFrames
+            trad_df = pd.DataFrame(trad_rows)
+            cx_df = pd.DataFrame(cx_rows)
+
+            # FIX: Remove empty or incomplete rows caused by states with no data
+            required_cols = ["First Name", "Last Name"]
+
+            trad_df = trad_df.dropna(subset=required_cols, how="any")
+            cx_df = cx_df.dropna(subset=required_cols, how="any")
+
+            # Now it's safe to sort
+            trad_df = trad_df.sort_values(["Last Name", "First Name"])    
+            cx_df = cx_df.sort_values(["Last Name", "First Name"])
+            #trad_df = pd.DataFrame(trad_rows).sort_values(["Last Name", "First Name"])
+            #cx_df = pd.DataFrame(cx_rows).sort_values(["Last Name", "First Name"])
 
             # --- GREY OUT "None" ---
             def grey_none(val):
