@@ -2068,7 +2068,12 @@ if page_choice == "State Champions, District & World Qualifiers (All Divisions)"
 
             # FIX: Remove empty or incomplete rows caused by states with no data
             required_cols = ["First Name", "Last Name"]
-
+            # Only drop rows if the required columns exist
+            for col in required_cols:
+                if col not in trad_df.columns:
+                    trad_df[col] = None
+                if col not in cx_df.columns:
+                    cx_df[col] = None
             trad_df = trad_df.dropna(subset=required_cols, how="any")
             cx_df = cx_df.dropna(subset=required_cols, how="any")
 
