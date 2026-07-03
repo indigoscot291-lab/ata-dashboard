@@ -1545,7 +1545,7 @@ elif page_choice == "National & District Rings":
             # This was ATA RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1314980945"
             #XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/19RYwkLfzdwg8r105flePpgRbbf5RvHM3JZohS1bKBDY/gviz/tq?tqx=out:csv&gid=253724932"
             XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1a4qQa-QXCU8X5pt3RtOaIFq6oOk-sdDsiI_m7E5CjdQ//gviz/tq?tqx=out:csv&gid=0"
-	        MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
+			MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
             
             # Load Rings sheet
             try:
@@ -1628,7 +1628,7 @@ elif page_choice == "National & District Rings":
             #This was ATA XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
             #FWRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1SPoBVRM27TvqDc1SlegCdi5K5mY6kjTSPDTnp0qgAHQ/gviz/tq?tqx=out:csv&gid=1329644400"
             FWRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1YB7P_0NJt7VsyQ45OkVQdN-CLfO1dZgor7cxaaJBDUw/gviz/tq?tqx=out:csv&gid=0"
-	        MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
+			MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
             try:
                 rings_df = pd.read_csv(FWRINGS_CSV_URL)
@@ -1704,7 +1704,7 @@ elif page_choice == "National & District Rings":
             #This was ATA XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
             #CSRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1SPoBVRM27TvqDc1SlegCdi5K5mY6kjTSPDTnp0qgAHQ/gviz/tq?tqx=out:csv&gid=1329644400"
             CSRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1hNaqdbpTas8vYV-r9_P089FjDIZAZXhjMWUEtZ9Ufds/gviz/tq?tqx=out:csv&gid=0"
-	        MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
+			MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
             try:
                 rings_df = pd.read_csv(CSRINGS_CSV_URL)
