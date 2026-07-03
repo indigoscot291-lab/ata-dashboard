@@ -883,7 +883,7 @@ elif page_choice == "National & District Rings":
     # New dropdown for event selection
     event_choice = st.selectbox(
         "Select Event:",
-        ["Fall Nationals 2025", "Spring Nationals 2026", "Euros 2026", "Districts 2026", "Suwanee TOC 2026", "Super 20 2026"],
+        ["Fall Nationals 2025", "Spring Nationals 2026", "Euros 2026", "Districts 2026", "Suwanee TOC 2026", "TOC 2026 Ring Assignments", "Super 20 2026"],
         index=0
     )
 
@@ -1989,7 +1989,66 @@ elif page_choice == "National & District Rings":
             else:
                 st.info("No results found. Enter a search term or select an ATA Number.")
                 
-           
+    elif event_choice == "TOC 2026 Ring Assignments":
+    section_choice = st.selectbox(
+        "Select Category:",
+        ["Creative & Xtreme", "Forms & Weapons", "Combat & Sparring"],
+        index=0
+    )
+
+    # URLs for each category (update GIDs if needed)
+    CX_URL = "https://docs.google.com/spreadsheets/d/1Ry7-HjKa2tttfWN1s1NBpBKm0AndJvEPmY67bieQHZg/gviz/tq?tqx=out:csv&gid=0"
+    FW_URL = "https://docs.google.com/spreadsheets/d/1Bin7_sMKEGRM2SSDPJt779bzHITMKI8_8NH1pOI13f4/gviz/tq?tqx=out:csv&gid=0"
+    CS_URL = "https://docs.google.com/spreadsheets/d/1l0kswgHR7hezM_iyTRZvpduhnAuzYUOrom4qKKVRwBc/gviz/tq?tqx=out:csv&gid=0"
+
+    # Select correct sheet
+    if section_choice == "Creative & Xtreme":
+        SHEET_URL = CX_URL
+    elif section_choice == "Forms & Weapons":
+        SHEET_URL = FW_URL
+    else:
+        SHEET_URL = CS_URL
+
+    # Load sheet
+    try:
+        rings_df = pd.read_csv(SHEET_URL)
+        st.success("✅ Sheet loaded successfully")
+    except Exception as e:
+        st.error(f"Failed to load sheet: {e}")
+        st.stop()
+
+    # Normalize column names
+    original_columns = list(rings_df.columns)
+    processing_columns = [c.split("\n")[0].strip() for c in rings_df.columns]
+    col_map = dict(zip(processing_columns, original_columns))
+
+    # Required column
+    div_col = col_map.get("Division")
+
+    if not div_col:
+        st.error("❌ 'Division' column not found in sheet.")
+        st.stop()
+
+    # Division search
+    divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
+    sel_div = st.selectbox("Select Division:", [""] + divisions)
+
+    if sel_div:
+        results = rings_df[rings_df[div_col].astype(str) == sel_div].copy()
+    else:
+        results = pd.DataFrame(columns=rings_df.columns)
+
+    st.subheader(f"Search Results ({len(results)})")
+    if not results.empty:
+        st.dataframe(
+            results.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+            height=600
+        )
+    else:
+        st.info("No results found. Select Division to view ring assignments.")
+       
     else:
         st.info(f"🕓 {event_choice} — Coming soon...")
 elif page_choice == "Historical Titles":
