@@ -1989,7 +1989,7 @@ elif page_choice == "National & District Rings":
             else:
                 st.info("No results found. Enter a search term or select an ATA Number.")
                 
-   elif event_choice == "TOC 2026 Ring Assignments":
+    elif event_choice == "TOC 2026 Ring Assignments":
 
         # --- Search Mode ---
         search_mode = st.radio(
