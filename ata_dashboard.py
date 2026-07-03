@@ -2003,7 +2003,7 @@ elif page_choice == "National & District Rings":
         FW_URL = "https://docs.google.com/spreadsheets/d/1Bin7_sMKEGRM2SSDPJt779bzHITMKI8_8NH1pOI13f4/gviz/tq?tqx=out:csv&gid=0"
         CS_URL = "https://docs.google.com/spreadsheets/d/1l0kswgHR7hezM_iyTRZvpduhnAuzYUOrom4qKKVRwBc/gviz/tq?tqx=out:csv&gid=0"
 
-        # --- GLOBAL SEARCH ACROSS ALL THREE SHEETS ---
+        #    --- GLOBAL SEARCH ACROSS ALL THREE SHEETS ---
         if search_mode == "Search All Divisions":
 
             dfs = []
@@ -2024,10 +2024,14 @@ elif page_choice == "National & District Rings":
 
                     # --- Create normalized division key for searching ---
                     if url == CX_URL:
-                        # CX sheet has CX-TM/... prefix → remove only for search
                         df["DivisionKey"] = df[div_col].astype(str).str.replace("CX-", "", regex=False)
+                        df["Category"] = "Creative & Xtreme"
+                    elif url == FW_URL:
+                        df["DivisionKey"] = df[div_col].astype(str)
+                        df["Category"] = "Forms & Weapons"
                     else:
                         df["DivisionKey"] = df[div_col].astype(str)
+                        df["Category"] = "Combat & Sparring"
 
                     dfs.append(df)
 
@@ -2046,6 +2050,15 @@ elif page_choice == "National & District Rings":
             else:
                 results = pd.DataFrame(columns=combined_df.columns)
 
+            # --- Hide DivisionKey before display ---
+            if "DivisionKey" in results.columns:
+                results = results.drop(columns=["DivisionKey"])
+
+            # --- Move Category to first column ---
+            if "Category" in results.columns:
+                cols = ["Category"] + [c for c in results.columns if c != "Category"]
+                results = results[cols]
+
             st.subheader(f"Search Results ({len(results)})")
             if not results.empty:
                 st.dataframe(
@@ -2053,7 +2066,7 @@ elif page_choice == "National & District Rings":
                     use_container_width=True,
                     hide_index=True,
                     height=600
-                )    
+                )
             else:
                 st.info("No results found. Select Division to view ring assignments.")
 
@@ -2070,10 +2083,13 @@ elif page_choice == "National & District Rings":
         # Select correct sheet
         if section_choice == "Creative & Xtreme":
             SHEET_URL = CX_URL
+            category_label = "Creative & Xtreme"
         elif section_choice == "Forms & Weapons":
             SHEET_URL = FW_URL
+            category_label = "Forms & Weapons"
         else:
             SHEET_URL = CS_URL
+            category_label = "Combat & Sparring"
 
         # Load sheet
         try:
@@ -2095,7 +2111,7 @@ elif page_choice == "National & District Rings":
             st.error("❌ 'Division' column not found in sheet.")
             st.stop()
 
-        # --- Category Division Search (NO normalization — display original values) ---
+        # --- Category Division Search ---
         divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
         sel_div = st.selectbox("Select Division:", [""] + divisions)
 
@@ -2104,6 +2120,9 @@ elif page_choice == "National & District Rings":
         else:
             results = pd.DataFrame(columns=rings_df.columns)
 
+        # --- Add Category column and move it to first position ---
+        results.insert(0, "Category", category_label)
+
         st.subheader(f"Search Results ({len(results)})")
         if not results.empty:
             st.dataframe(
@@ -2111,7 +2130,7 @@ elif page_choice == "National & District Rings":
                 use_container_width=True,
                 hide_index=True,
                 height=600
-            )    
+            )
         else:
             st.info("No results found. Select Division to view ring assignments.")
 
