@@ -1990,11 +1990,11 @@ elif page_choice == "National & District Rings":
                 st.info("No results found. Enter a search term or select an ATA Number.")
                 
     elif event_choice == "TOC 2026 Ring Assignments":
-    section_choice = st.selectbox(
-        "Select Category:",
-        ["Creative & Xtreme", "Forms & Weapons", "Combat & Sparring"],
-        index=0
-    )
+        section_choice = st.selectbox(
+            "Select Category:",
+            ["Creative & Xtreme", "Forms & Weapons", "Combat & Sparring"],
+            index=0
+        )
 
     # URLs for each category (update GIDs if needed)
     CX_URL = "https://docs.google.com/spreadsheets/d/1Ry7-HjKa2tttfWN1s1NBpBKm0AndJvEPmY67bieQHZg/gviz/tq?tqx=out:csv&gid=0"
