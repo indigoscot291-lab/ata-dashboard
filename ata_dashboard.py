@@ -1628,7 +1628,7 @@ elif page_choice == "National & District Rings":
             #This was ATA XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
             #FWRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1SPoBVRM27TvqDc1SlegCdi5K5mY6kjTSPDTnp0qgAHQ/gviz/tq?tqx=out:csv&gid=1329644400"
             FWRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1YB7P_0NJt7VsyQ45OkVQdN-CLfO1dZgor7cxaaJBDUw/gviz/tq?tqx=out:csv&gid=0"
-			MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
+            MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
             try:
                 rings_df = pd.read_csv(FWRINGS_CSV_URL)
