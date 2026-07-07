@@ -2001,8 +2001,8 @@ elif page_choice == "National & District Rings":
         # URLs for each category
         CX_URL = "https://docs.google.com/spreadsheets/d/1Ry7-HjKa2tttfWN1s1NBpBKm0AndJvEPmY67bieQHZg/gviz/tq?tqx=out:csv&gid=0"
         FW_URL = "https://docs.google.com/spreadsheets/d/1Bin7_sMKEGRM2SSDPJt779bzHITMKI8_8NH1pOI13f4/gviz/tq?tqx=out:csv&gid=0"
-        #CS_URL = "https://docs.google.com/spreadsheets/d/1l0kswgHR7hezM_iyTRZvpduhnAuzYUOrom4qKKVRwBc/gviz/tq?tqx=out:csv&gid=0"
-        CS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSbKCaC6zmCJIn3LCbdOd2nc1r8VxrsC5k-UZXPJr6O7N6U6bCvT3w8thZ5X8TXC3l3n7ylIFS0Dzpm/gviz/tq?tqx=out:csv&gid=41474543"
+        CS_URL = "https://docs.google.com/spreadsheets/d/1l0kswgHR7hezM_iyTRZvpduhnAuzYUOrom4qKKVRwBc/gviz/tq?tqx=out:csv&gid=0"
+        #CS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSbKCaC6zmCJIn3LCbdOd2nc1r8VxrsC5k-UZXPJr6O7N6U6bCvT3w8thZ5X8TXC3l3n7ylIFS0Dzpm/gviz/tq?tqx=out:csv&gid=41474543"
         #    --- GLOBAL SEARCH ACROSS ALL THREE SHEETS ---
         if search_mode == "Search All Divisions":
 
