@@ -1414,7 +1414,8 @@ elif page_choice == "National & District Rings":
             #This was ATA XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=852123357"
             #XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1SPoBVRM27TvqDc1SlegCdi5K5mY6kjTSPDTnp0qgAHQ/gviz/tq?tqx=out:csv&gid=1329644400"
             #XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1QU15tioA84Vhfq0k_19cwIiiDQHZB_IZFHNznBCnadc/gviz/tq?tqx=out:csv&gid=0"
-            XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1sESAkJ10uKgXUU3ErCHf4BfVi4wSJvvo5SGCakKpDno/export?format=csv"
+            #XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1sESAkJ10uKgXUU3ErCHf4BfVi4wSJvvo5SGCakKpDno/export?format=csv"
+            XRINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQlZFFS5keWU6Q65fbtQRUtG-f90a37Q80ZcVRGtmKEEgA4RvJbXx8yp3eIhk6kiQ/pub?output=csv"
             MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
 
             try:
