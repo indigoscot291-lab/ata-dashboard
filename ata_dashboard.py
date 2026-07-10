@@ -1317,11 +1317,11 @@ elif page_choice == "National & District Rings":
 			
     elif event_choice == "Super 20 2026":
 		# Dropdown selector
-		section_choice = st.selectbox(
-        	"Select Category:",
-        	["Traditional", "Creative & Xtreme", "Judging Assignment"],
+	    section_choice = st.selectbox(
+            "Select Category:",
+            ["Traditional", "Creative & Xtreme", "Judging Assignment"],
             index=0
-        )
+	    )
 
         # --- TRADITIONAL ---
         if section_choice == "Traditional":
