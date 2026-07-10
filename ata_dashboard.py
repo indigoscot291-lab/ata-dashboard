@@ -1320,7 +1320,7 @@ elif page_choice == "National & District Rings":
         # Dropdown selector
         section_choice = st.selectbox(
             "Select Category:",
-            ["Traditional", "Creative & Xtreme", "Judging"],
+            ["Traditional", "Creative & Xtreme", "Judging Assignment"],
             index=0
         )
 
