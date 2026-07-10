@@ -1314,7 +1314,7 @@ elif page_choice == "National & District Rings":
                 st.dataframe(results.reset_index(drop=True), use_container_width=True, hide_index=True, height=600)
             else:
                 st.info("No results found. Enter a search term or select an ATA Number.")
-				
+			
 	elif event_choice == "Super 20 2026":
         # Dropdown selector
         section_choice = st.selectbox(
