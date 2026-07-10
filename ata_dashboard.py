@@ -1453,7 +1453,7 @@ elif page_choice == "National & District Rings":
                         results = rings_df.loc[mask].copy()
 
             elif search_type == "Division Assigned":
-                div_col = col_map.get("RING IDENTIFIER")
+                div_col = col_map.get("Competition Division")
                 if div_col:
                     divisions = sorted(rings_df[div_col].dropna().astype(str).unique())
                     sel_div = st.selectbox("Select Division Assigned (or leave blank):", [""] + divisions)
