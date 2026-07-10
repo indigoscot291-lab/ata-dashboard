@@ -1320,7 +1320,7 @@ elif page_choice == "National & District Rings":
         # Dropdown selector
         section_choice = st.selectbox(
             "Select Category:",
-            ["Traditional", "Creative & Xtreme"],
+            ["Traditional", "Creative & Xtreme", "Judging"],
             index=0
         )
 
@@ -1360,8 +1360,8 @@ elif page_choice == "National & District Rings":
             if search_type == "Name":
                 name_query = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
                 if name_query:
-                    ln_col = col_map.get("LAST NAME")
-                    fn_col = col_map.get("FIRST NAME")
+                    ln_col = col_map.get("Last Name")
+                    fn_col = col_map.get("First Name")
                     if ln_col and fn_col:
                         mask = (
                             rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
@@ -1387,8 +1387,8 @@ elif page_choice == "National & District Rings":
                             members_filtered['MemberFirstName'].str.strip() + " " +
                             members_filtered['MemberLastName'].str.strip()
                         ).str.lower()
-                        ln_col = col_map.get("LAST NAME")
-                        fn_col = col_map.get("FIRST NAME")
+                        ln_col = col_map.get("Last Name")
+                        fn_col = col_map.get("First Name")
                         if ln_col and fn_col:
                             rings_fullname = (
                                 rings_df[fn_col].astype(str).str.strip() + " " +
@@ -1442,8 +1442,8 @@ elif page_choice == "National & District Rings":
             if search_type == "Name":
                 name_query = st.text_input("Enter full or partial name (Last, First, or both):").strip().lower()
                 if name_query:
-                    ln_col = col_map.get("LAST NAME")
-                    fn_col = col_map.get("FIRST NAME")
+                    ln_col = col_map.get("Last Name")
+                    fn_col = col_map.get("First Name")
                     if ln_col and fn_col:
                         mask = (
                             rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
@@ -1469,8 +1469,8 @@ elif page_choice == "National & District Rings":
                             members_filtered['MemberFirstName'].str.strip() + " " +
                             members_filtered['MemberLastName'].str.strip()
                         ).str.lower()
-                        ln_col = col_map.get("LAST NAME")
-                        fn_col = col_map.get("FIRST NAME")
+                        ln_col = col_map.get("Last Name")
+                        fn_col = col_map.get("First Name")
                         if ln_col and fn_col:
                             rings_fullname = (
                                 rings_df[fn_col].astype(str).str.strip() + " " +
@@ -1492,8 +1492,8 @@ elif page_choice == "National & District Rings":
             st.write("✅ Entered Judging Assignments block")  # Debug
 
             #This was ATA JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOBNJ49nc8Scigr4QfyQJphqeK-pmEs9oDxNXSAekIECIsdnQF4LpjKzRABCF9g/pub?output=csv&gid=1460144985"
-            JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI/gviz/tq?tqx=out:csv&gid=993945995"
-            
+            #JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/1dwiw1x6Lh081__L5pt5RSJMuBXmDxmcnRpYClLBcBVI/gviz/tq?tqx=out:csv&gid=993945995"
+            JUDGE_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTBTyxtJuE7Z26c2NMnr5jqu0esi5iioMudVmHSnSm9wCKFN1I8OKHoTX1vUe0o4A/pub?output=csv"
             try:
                 rings_df = pd.read_csv(JUDGE_CSV_URL)
                 st.success("✅ Judges sheet loaded successfully")
@@ -1511,8 +1511,8 @@ elif page_choice == "National & District Rings":
             if search_type == "Name":
                 name_query = st.text_input("Enter full or partial name:").strip().lower()
                 if name_query:
-                    ln_col = col_map.get("LAST NAME")
-                    fn_col = col_map.get("FIRST NAME")
+                    ln_col = col_map.get("Last Name")
+                    fn_col = col_map.get("First Name")
                     if ln_col and fn_col:
                         mask = (
                             rings_df[ln_col].astype(str).str.lower().str.contains(name_query, na=False)
