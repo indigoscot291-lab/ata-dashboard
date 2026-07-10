@@ -1316,10 +1316,10 @@ elif page_choice == "National & District Rings":
                 st.info("No results found. Enter a search term or select an ATA Number.")
 			
 	elif event_choice == "Super 20 2026":
-        # Dropdown selector
-        section_choice = st.selectbox(
-            "Select Category:",
-            ["Traditional", "Creative & Xtreme", "Judging Assignment"],
+		# Dropdown selector
+		section_choice = st.selectbox(
+        	"Select Category:",
+        	["Traditional", "Creative & Xtreme", "Judging Assignment"],
             index=0
         )
 
