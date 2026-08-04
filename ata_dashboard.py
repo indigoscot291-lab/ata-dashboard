@@ -620,8 +620,8 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         #st.write("DEBUG URL:", url)
         
         html = fetch_html(url)
-		if is_login_wall(html):
-			continue
+        if is_login_wall(html):
+		    continue
 			
 		if html:
             state_data = parse_standings(html)
