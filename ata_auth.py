@@ -19,45 +19,40 @@ def get_myata_session():
     }
 
     # STEP 1 — GET LOGIN PAGE
-    resp = session.get(LOGIN_URL, headers=headers, allow_redirects=True)
-
-    print("LOGIN GET status:", resp.status_code)
-    print("LOGIN GET length:", len(resp.text))
-
-    if resp.status_code != 200:
-        st.error(f"MyATA login page returned status {resp.status_code}.")
-        return session
-
+    resp = session.get(LOGIN_URL, headers=headers)
     soup = BeautifulSoup(resp.text, "html.parser")
-    csrf_input = soup.find("input", {"name": "csrfmiddlewaretoken"})
 
-    if not csrf_input:
-        st.error("Could not find CSRF token on ATA login page.")
+    # Extract ASP.NET Core anti-forgery tokens
+    token = soup.find("input", {"name": "__RequestVerificationToken"})
+    ufprt = soup.find("input", {"name": "ufprt"})
+
+    if not token or not ufprt:
+        st.error("ATA login page missing required anti-forgery tokens.")
         return session
 
-    csrf = csrf_input.get("value")
+    token_value = token.get("value")
+    ufprt_value = ufprt.get("value")
 
-    # STEP 2 — POST LOGIN
+    # STEP 2 — Build login payload
     payload = {
-        "username": st.secrets["MYATA_USER"],
-        "password": st.secrets["MYATA_PASS"],
-        "csrfmiddlewaretoken": csrf,
+        "loginModel.Username": st.secrets["MYATA_USER"],
+        "loginModel.Password": st.secrets["MYATA_PASS"],
+        "loginModel.RememberMe": "false",
+        "loginModel.RedirectUrl": "",
+        "__RequestVerificationToken": token_value,
+        "ufprt": ufprt_value,
     }
 
-    login_resp = session.post(LOGIN_URL, data=payload, headers=headers, allow_redirects=True)
+    # STEP 3 — POST LOGIN
+    login_resp = session.post(LOGIN_URL, data=payload, headers=headers)
 
-    print("LOGIN POST status:", login_resp.status_code)
-    print("LOGIN POST length:", len(login_resp.text))
-
-    if login_resp.status_code != 200:
-        st.error(f"MyATA login POST returned status {login_resp.status_code}.")
-        return session
-
-    # STEP 3 — Detect login failure
-    text = login_resp.text.lower()
-    if "sign in" in text or "login" in text:
-        st.error("ATA login failed — check username/password in st.secrets.")
+    # Detect login failure
+    if "Sign In" in login_resp.text or "Password" in login_resp.text:
+        st.error("ATA login failed — check username/password.")
         return session
 
     return session
 
+    
+
+    
