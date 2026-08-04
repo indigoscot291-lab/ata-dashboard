@@ -20,6 +20,7 @@ def get_myata_session():
 
     # STEP 1 — GET LOGIN PAGE
     resp = session.get(LOGIN_URL, headers=headers)
+    print("LOGIN PAGE HTML:\n", resp.text[:2000])
     soup = BeautifulSoup(resp.text, "html.parser")
 
     # Extract ASP.NET Core anti-forgery tokens
