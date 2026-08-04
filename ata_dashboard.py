@@ -580,8 +580,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
     world_html = fetch_html(group["world_url"])
     if is_login_wall(world_html):
 	    return {}, False
-		
-	if world_html:
+    if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
