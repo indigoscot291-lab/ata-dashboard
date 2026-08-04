@@ -5,6 +5,11 @@ import pandas as pd
 import re
 import io
 import concurrent.futures
+
+from ata_auth import get_myata_session
+
+SESSION = get_myata_session()
+
 #
 # Page config
 st.set_page_config(page_title="ATA Standings Dashboard", layout="wide")
@@ -153,21 +158,34 @@ MATRIX_GROUPS = load_matrix_groups_v2()
 
 # New fetch function only for District and World Qualifiers
 
+#def fetch_html_v2(url: str):
+#    headers = {
+#        "User-Agent": (
+#            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+#            "AppleWebKit/537.36 (KHTML, like Gecko) "
+#            "Chrome/123.0.0.0 Safari/537.36"
+#        ),
+#        "Accept-Language": "en-US,en;q=0.9",
+#        "Referer": "https://atamartialarts.com/",
+#        "Cache-Control": "no-cache",
+#        "Pragma": "no-cache",
+#   }
+#    try:
+#        r = requests.get(url, headers=headers, timeout=15)
+#        if r.status_code == 200 and len(r.text) > 5000:
+#            return r.text
+#    except:
+#        return None
+#    return None
+
 def fetch_html_v2(url: str):
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/123.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0",
         "Referer": "https://atamartialarts.com/",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
     }
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code == 200 and len(r.text) > 5000:
+        r = SESSION.get(url, headers=headers, timeout=15)
+        if r.status_code == 200:
             return r.text
     except:
         return None
@@ -412,10 +430,20 @@ import pandas as pd
 import streamlit as st
 
 # --- HELPERS ---
+#@st.cache_data(ttl=3600)
+#def fetch_html(url: str):
+#    try:
+#        r = requests.get(url, timeout=12)
+#        if r.status_code == 200:
+#            return r.text
+#    except Exception:
+#        return None
+#    return None
+
 @st.cache_data(ttl=3600)
 def fetch_html(url: str):
     try:
-        r = requests.get(url, timeout=12)
+        r = SESSION.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12)
         if r.status_code == 200:
             return r.text
     except Exception:
@@ -517,6 +545,11 @@ def parse_standings(html: str):
 
     return data
 
+def is_login_wall(html: str) -> bool:
+    if not html:
+        return True
+    text = html.lower()
+    return ("sign in" in text and "myata" in text) or ("login" in text and "myata" in text)
 
 def gather_data(group_key: str, region_choice: str, district_choice: str):
     group = GROUPS[group_key]
@@ -545,7 +578,10 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
 
     # WORLD DATA
     world_html = fetch_html(group["world_url"])
-    if world_html:
+    if is_login_wall(world_html):
+		return {}, False
+		
+	if world_html:
         world_data = parse_standings(world_html)
         for ev, entries in world_data.items():
             combined[ev].extend(entries)
@@ -585,7 +621,10 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         #st.write("DEBUG URL:", url)
         
         html = fetch_html(url)
-        if html:
+        if is_login_wall(html):
+			continue
+			
+		if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
                 combined[ev].extend(entries)
