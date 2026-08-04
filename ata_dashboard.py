@@ -22,20 +22,20 @@ EVENT_NAMES = [
 GROUPS = {
     "1st Degree Black Belt Women 50-59": {
         "code": "W01D",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W01D",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1tCWIc-Zeog8GFH6fZJJR-85GHbC1Kjhx50UvGluZqdg/export?format=csv"
+        "world_url": "https://atamartialarts.com/myata/tournament-standings/worlds-standings/?code=W01D",
+        "state_url_template": "https://atamartialarts.com/myata/tournament-standings/state-standings/?country={}&state={}&code={}",
+        "sheet_url": "https://docs.google.com/spreadsheets/d/1lTyWNieetEzELxDIL5vW35Ibi0A_ff9D7cgLIs7Pu3o/export?format=csv"
     },
-    "2nd/3rd Degree Black Belt Women 40-49": {
-        "code": "W23C",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=W23C",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": "https://docs.google.com/spreadsheets/d/1W7q6YjLYMqY9bdv5G77KdK2zxUKET3NZMQb9Inu2F8w/export?format=csv"
+    "2nd/3rd Degree Black Belt Women 50-59": {
+        "code": "W23D",
+        "world_url": "https://atamartialarts.com/myata/tournament-standings/worlds-standings/?code=W23D",
+        "state_url_template": "https://atamartialarts.com/myata/tournament-standings/state-standings/?country={}&state={}&code={}",
+        "sheet_url": "https://docs.google.com/spreadsheets/d/13xCSyusv7TB0FYV1VOeHynsL5n7gPtCn6QKCNCxD4lc/export?format=csv"
     },
     "50-59 Women Color Belts": {
         "code": "WCOD",
-        "world_url": "https://atamartialarts.com/events/tournament-standings/worlds-standings/?code=WCOD",
-        "state_url_template": "https://atamartialarts.com/events/tournament-standings/state-standings/?country={}&state={}&code={}",
+        "world_url": "https://atamartialarts.com/myata/tournament-standings/worlds-standings/?code=WCOD",
+        "state_url_template": "https://atamartialarts.com/myata/tournament-standings/state-standings/?country={}&state={}&code={}",
         "sheet_url": None
     },
     "2nd/3rd Degree Black Belt Women 50-59": {
