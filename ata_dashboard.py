@@ -621,7 +621,7 @@ def gather_data(group_key: str, region_choice: str, district_choice: str):
         
         html = fetch_html(url)
         if is_login_wall(html):
-		    continue		
+            continue		
 		if html:
             state_data = parse_standings(html)
             for ev, entries in state_data.items():
