@@ -135,12 +135,12 @@ def load_matrix_groups_v2():
 
             # Build URLs using the formats YOU confirmed
             world_url = (
-                "https://atamartialarts.com/events/tournament-standings/"
+                "https://atamartialarts.com/myata/tournament-standings/"
                 f"worlds-standings/?code={code}"
             )
 
             state_url_template = (
-                "https://atamartialarts.com/events/tournament-standings/"
+                "https://atamartialarts.com/myata/tournament-standings/"
                 "state-standings/?country={}&state={}&code=" + code
             )
 
