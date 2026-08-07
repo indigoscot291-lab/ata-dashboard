@@ -179,14 +179,42 @@ MATRIX_GROUPS = load_matrix_groups_v2()
 #        return None
 #    return None
 
+#def fetch_html_v2(url: str):
+#    headers = {
+#        "User-Agent": "Mozilla/5.0",
+#        "Referer": "https://atamartialarts.com/",
+#    }
+#    try:
+#        r = SESSION.get(url, headers=headers, timeout=15)
+#        if r.status_code == 200:
+#            return r.text
+#    except:
+#        return None
+#    return None
 def fetch_html_v2(url: str):
     headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": "https://atamartialarts.com/",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "image/avif,image/webp,*/*;q=0.8"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://atamartialarts.com/myata/",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
     }
+
     try:
         r = SESSION.get(url, headers=headers, timeout=15)
-        if r.status_code == 200:
+        print(r.text[:500])
+		if r.status_code == 200:
             return r.text
     except:
         return None
