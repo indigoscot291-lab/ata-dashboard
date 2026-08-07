@@ -51,6 +51,36 @@ def get_myata_session():
     if "Sign In" in login_resp.text or "Password" in login_resp.text:
         st.error("ATA login failed — check username/password.")
         return session
+    # DEBUG: Test a protected page immediately after login
+    test_url = "https://atamartialarts.com/myata/tournament-standings/worlds-standings/?code=W01D"
+
+    debug_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": "https://atamartialarts.com/myata/",
+        "Origin": "https://atamartialarts.com",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-User": "?1",
+    }
+
+    test_resp = session.get(test_url, headers=debug_headers, allow_redirects=True)
+
+    print("\n===== DEBUG: COOKIES AFTER LOGIN =====")
+    for c in session.cookies:
+        print(c.name, c.value, c.domain, c.path)
+
+    print("\n===== DEBUG: STATUS FOR PROTECTED PAGE =====")
+    print("Status:", test_resp.status_code)
+
+    print("\n===== DEBUG: FIRST 500 CHARS OF PROTECTED PAGE =====")
+    print(test_resp.text[:500])
 
     return session
 
