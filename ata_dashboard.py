@@ -562,28 +562,110 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+#def parse_standings(html: str):
+#    soup = BeautifulSoup(html, "html.parser")
+#    data = {ev: [] for ev in EVENT_NAMES}
+    # ⭐ DEBUG: Count tables
+#    tables = soup.find_all("table")
+#    st.write("DEBUG: Number of tables found:", len(tables))
+
+    # ⭐ DEBUG: Show first 200 chars of each table
+#    for i, t in enumerate(tables):
+#        st.write(f"DEBUG: Table {i} preview:")
+#        st.code(str(t)[:200])
+
+    # ⭐ DEBUG: Count headers
+#    headers = soup.find_all("ul", class_="tournament-header")
+#    st.write("DEBUG: Number of headers found:", len(headers))
+
+    # ⭐ DEBUG: Show each header text
+#    for i, h in enumerate(headers):
+#        st.write(f"DEBUG: Header {i} text:")
+#        st.code(h.get_text(strip=True))
+
+    # Province name → abbreviation
+#    PROVINCE_NAME_TO_ABBREV = {
+#        "Alberta": "AB",
+#        "British Columbia": "BC",
+#        "Manitoba": "MB",
+#        "New Brunswick": "NB",
+#        "Newfoundland and Labrador": "NL",
+#        "Nova Scotia": "NS",
+#        "Ontario": "ON",
+#        "Prince Edward Island": "PE",
+#        "Quebec": "QC",
+#        "Saskatchewan": "SK",
+#    }
+
+#    headers = soup.find_all("ul", class_="tournament-header")
+#    tables = soup.find_all("table")
+
+#    for header, table in zip(headers, tables):
+#        evt = header.find("span", class_="text-primary text-uppercase")
+#        if not evt:
+#            continue
+
+#        ev_name = evt.get_text(strip=True)
+#        if ev_name not in EVENT_NAMES:
+#            continue
+
+#        tbody = table.find("tbody")
+#        if not tbody:
+#            continue
+
+#        for tr in tbody.find_all("tr"):
+#            cols = [td.get_text(strip=True) for td in tr.find_all("td")]
+#            if len(cols) != 4:
+#                continue
+
+#            rank_s, name, pts_s, loc = cols
+
+#            try:
+#                pts_val = int(pts_s)
+#            except:
+#                continue
+
+#            if pts_val <= 0:
+#                continue
+
+            # --- FIX: Proper location parsing for Canada ---
+#            loc = loc.strip()
+#            loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+
+#            if "," in loc_norm:
+#                town, region_part = loc_norm.split(",", 1)
+#            else:
+#                parts = loc_norm.split()
+#                if len(parts) > 1:
+#                    town = " ".join(parts[:-1])
+#                    region_part = parts[-1]
+#                else:
+#                    town = loc_norm
+#                    region_part = ""
+
+#            town = town.strip()
+#            region_part = region_part.strip()
+
+            # Convert province names → abbreviations
+#            if region_part.title() in PROVINCE_NAME_TO_ABBREV:
+#                state_abbrev = PROVINCE_NAME_TO_ABBREV[region_part.title()]
+#            else:
+#                state_abbrev = region_part.replace(".", "").strip().upper()
+
+#            data[ev_name].append({
+#                "Rank": int(rank_s),
+#                "Name": name.strip(),
+#                "Points": pts_val,
+#                "Town": town,
+#                "State": state_abbrev,
+#                "Location": loc.strip()
+#            })
+
+#    return data
 def parse_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
-    # ⭐ DEBUG: Count tables
-    tables = soup.find_all("table")
-    st.write("DEBUG: Number of tables found:", len(tables))
 
-    # ⭐ DEBUG: Show first 200 chars of each table
-    for i, t in enumerate(tables):
-        st.write(f"DEBUG: Table {i} preview:")
-        st.code(str(t)[:200])
-
-    # ⭐ DEBUG: Count headers
-    headers = soup.find_all("ul", class_="tournament-header")
-    st.write("DEBUG: Number of headers found:", len(headers))
-
-    # ⭐ DEBUG: Show each header text
-    for i, h in enumerate(headers):
-        st.write(f"DEBUG: Header {i} text:")
-        st.code(h.get_text(strip=True))
-
-    # Province name → abbreviation
     PROVINCE_NAME_TO_ABBREV = {
         "Alberta": "AB",
         "British Columbia": "BC",
@@ -597,16 +679,22 @@ def parse_standings(html: str):
         "Saskatchewan": "SK",
     }
 
+    # Find all event headers
     headers = soup.find_all("ul", class_="tournament-header")
-    tables = soup.find_all("table")
 
-    for header, table in zip(headers, tables):
+    for header in headers:
+        # Extract event name
         evt = header.find("span", class_="text-primary text-uppercase")
         if not evt:
             continue
 
         ev_name = evt.get_text(strip=True)
         if ev_name not in EVENT_NAMES:
+            continue
+
+        # ⭐ FIX: Find the NEXT table after this header
+        table = header.find_next("table")
+        if not table:
             continue
 
         tbody = table.find("tbody")
@@ -628,10 +716,7 @@ def parse_standings(html: str):
             if pts_val <= 0:
                 continue
 
-            # --- FIX: Proper location parsing for Canada ---
-            loc = loc.strip()
             loc_norm = loc.replace(", ", ",").replace(" ,", ",")
-
             if "," in loc_norm:
                 town, region_part = loc_norm.split(",", 1)
             else:
@@ -646,7 +731,6 @@ def parse_standings(html: str):
             town = town.strip()
             region_part = region_part.strip()
 
-            # Convert province names → abbreviations
             if region_part.title() in PROVINCE_NAME_TO_ABBREV:
                 state_abbrev = PROVINCE_NAME_TO_ABBREV[region_part.title()]
             else:
