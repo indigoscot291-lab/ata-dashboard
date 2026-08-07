@@ -20,8 +20,8 @@ def get_myata_session():
 
     # STEP 1 — GET LOGIN PAGE
     resp = session.get(LOGIN_URL, headers=headers)
-    print("===== DEBUG: LOGIN PAGE FIRST 2000 CHARS =====")
-    print(resp.text[:2000])
+    st.write("===== DEBUG: LOGIN PAGE FIRST 2000 CHARS =====")
+    st.write(resp.text[:2000])
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -30,11 +30,11 @@ def get_myata_session():
     ufprt = soup.find("input", {"name": "ufprt"})
 
     # DEBUG: token extraction
-    print("===== DEBUG: TOKEN FOUND? =====", bool(token))
-    print("===== DEBUG: UFPRT FOUND? =====", bool(ufprt))
+    st.write("===== DEBUG: TOKEN FOUND? =====", bool(token))
+    st.write("===== DEBUG: UFPRT FOUND? =====", bool(ufprt))
 
     if not token or not ufprt:
-        print("===== DEBUG: TOKEN FAILURE — RETURNING EARLY =====")
+        st.write("===== DEBUG: TOKEN FAILURE — RETURNING EARLY =====")
         st.error("ATA login page missing required anti-forgery tokens.")
         return session
 
@@ -55,12 +55,12 @@ def get_myata_session():
     login_resp = session.post(LOGIN_URL, data=payload, headers=headers)
 
     # DEBUG: login response
-    print("===== DEBUG: LOGIN RESPONSE LENGTH =====", len(login_resp.text))
-    print("===== DEBUG: LOGIN RESPONSE FIRST 300 CHARS =====")
-    print(login_resp.text[:300])
+    st.write("===== DEBUG: LOGIN RESPONSE LENGTH =====", len(login_resp.text))
+    st.write("===== DEBUG: LOGIN RESPONSE FIRST 300 CHARS =====")
+    st.write(login_resp.text[:300])
 
     if "Sign In" in login_resp.text or "Password" in login_resp.text:
-        print("===== DEBUG: LOGIN FAILURE — RETURNING EARLY =====")
+        st.write("===== DEBUG: LOGIN FAILURE — RETURNING EARLY =====")
         st.error("ATA login failed — check username/password.")
         return session
 
@@ -88,19 +88,20 @@ def get_myata_session():
 
     test_resp = session.get(test_url, headers=debug_headers, allow_redirects=True)
 
-    print("\n===== DEBUG: COOKIES AFTER LOGIN =====")
+    st.write("===== DEBUG: COOKIES AFTER LOGIN =====")
+    cookie_dump = []
     for c in session.cookies:
-        print("COOKIE:", c.name, "| VALUE:", c.value, "| DOMAIN:", c.domain, "| PATH:", c.path)
+        cookie_dump.append(f"{c.name} | {c.value} | {c.domain} | {c.path}")
+    st.write(cookie_dump)
 
-    print("\n===== DEBUG: STATUS FOR PROTECTED PAGE =====")
-    print("Status:", test_resp.status_code)
+    st.write("===== DEBUG: STATUS FOR PROTECTED PAGE =====")
+    st.write(test_resp.status_code)
 
-    print("\n===== DEBUG: FIRST 500 CHARS OF PROTECTED PAGE =====")
-    print(test_resp.text[:500])
+    st.write("===== DEBUG: FIRST 500 CHARS OF PROTECTED PAGE =====")
+    st.write(test_resp.text[:500])
 
     ###############################################
     # END DEBUG BLOCK
     ###############################################
 
     return session
-
