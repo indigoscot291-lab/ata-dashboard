@@ -777,15 +777,15 @@ def parse_standings(html: str):
     data = {ev: [] for ev in EVENT_NAMES}
 
     # ⭐ DEBUG: Count tables
-    #tables = soup.find_all("table")
+    tables = soup.find_all("table")
     #st.write("DEBUG: Number of tables found:", len(tables))
 
     #for i, t in enumerate(tables):
     #    st.write(f"DEBUG: Table {i} preview:")
-    #    st.code(str(t)[:200])
+         st.code(str(t)[:200])
 
     # ⭐ DEBUG: Count headers
-    #headers = soup.find_all("ul", class_="tournament-header")
+    headers = soup.find_all("ul", class_="tournament-header")
     #st.write("DEBUG: Number of headers found:", len(headers))
 
     #for i, h in enumerate(headers):
