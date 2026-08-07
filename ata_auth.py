@@ -20,14 +20,21 @@ def get_myata_session():
 
     # STEP 1 — GET LOGIN PAGE
     resp = session.get(LOGIN_URL, headers=headers)
-    print("LOGIN PAGE HTML:\n", resp.text[:2000])
+    print("===== DEBUG: LOGIN PAGE FIRST 2000 CHARS =====")
+    print(resp.text[:2000])
+
     soup = BeautifulSoup(resp.text, "html.parser")
 
     # Extract ASP.NET Core anti-forgery tokens
     token = soup.find("input", {"name": "__RequestVerificationToken"})
     ufprt = soup.find("input", {"name": "ufprt"})
 
+    # DEBUG: token extraction
+    print("===== DEBUG: TOKEN FOUND? =====", bool(token))
+    print("===== DEBUG: UFPRT FOUND? =====", bool(ufprt))
+
     if not token or not ufprt:
+        print("===== DEBUG: TOKEN FAILURE — RETURNING EARLY =====")
         st.error("ATA login page missing required anti-forgery tokens.")
         return session
 
@@ -47,11 +54,20 @@ def get_myata_session():
     # STEP 3 — POST LOGIN
     login_resp = session.post(LOGIN_URL, data=payload, headers=headers)
 
-    # Detect login failure
+    # DEBUG: login response
+    print("===== DEBUG: LOGIN RESPONSE LENGTH =====", len(login_resp.text))
+    print("===== DEBUG: LOGIN RESPONSE FIRST 300 CHARS =====")
+    print(login_resp.text[:300])
+
     if "Sign In" in login_resp.text or "Password" in login_resp.text:
+        print("===== DEBUG: LOGIN FAILURE — RETURNING EARLY =====")
         st.error("ATA login failed — check username/password.")
         return session
-    # DEBUG: Test a protected page immediately after login
+
+    ###############################################
+    # DEBUG BLOCK — TEST PROTECTED PAGE
+    ###############################################
+
     test_url = "https://atamartialarts.com/myata/tournament-standings/worlds-standings/?code=W01D"
 
     debug_headers = {
@@ -74,7 +90,7 @@ def get_myata_session():
 
     print("\n===== DEBUG: COOKIES AFTER LOGIN =====")
     for c in session.cookies:
-        print(c.name, c.value, c.domain, c.path)
+        print("COOKIE:", c.name, "| VALUE:", c.value, "| DOMAIN:", c.domain, "| PATH:", c.path)
 
     print("\n===== DEBUG: STATUS FOR PROTECTED PAGE =====")
     print("Status:", test_resp.status_code)
@@ -82,8 +98,9 @@ def get_myata_session():
     print("\n===== DEBUG: FIRST 500 CHARS OF PROTECTED PAGE =====")
     print(test_resp.text[:500])
 
+    ###############################################
+    # END DEBUG BLOCK
+    ###############################################
+
     return session
 
-    
-
-    
