@@ -516,43 +516,88 @@ import streamlit as st
 #    return None
 
 @st.cache_data(ttl=3600)
+
 def fetch_html(url: str):
+    """
+    Fetches HTML using your authenticated ATA session.
+    Automatically refreshes cookies if needed.
+    """
+
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
+            "Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"
         ),
         "Accept": (
             "text/html,application/xhtml+xml,application/xml;q=0.9,"
-            "image/avif,image/webp,*/*;q=0.8"
+            "image/avif,image/webp,image/apng,*/*;q=0.8,"
+            "application/signed-exchange;v=b3;q=0.7"
         ),
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
         "Referer": "https://atamartialarts.com/myata/",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
         "Sec-Fetch-User": "?1",
+        "Sec-Ch-Ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Microsoft Edge\";v=\"150\"",
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": "\"Windows\"",
         "Upgrade-Insecure-Requests": "1",
     }
 
-    try:
-        r = SESSION.get(url, headers=headers, timeout=12)
+    r = SESSION.get(url, headers=headers)
 
-        # ⭐ DEBUG: PRINT FULL HTML
-        st.write("DEBUG: FULL HTML OUTPUT BELOW")
-        st.code(r.text)
+    # If session expired → refresh and retry once
+    if r.status_code in (401, 403) or "tournament-header" not in r.text:
+        st.write("DEBUG: Session expired. Refreshing ATA session...")
+        from ata_auth import refresh_ata_session
+        refresh_ata_session(SESSION)
+        r = SESSION.get(url, headers=headers)
 
-        if r.status_code == 200:
-            return r.text
+    return r.text
 
-    except Exception as e:
-        st.write("DEBUG ERROR:", e)
-        return None
 
-    return None
+#def fetch_html(url: str):
+#    headers = {
+#        "User-Agent": (
+#            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+#            "AppleWebKit/537.36 (KHTML, like Gecko) "
+#            "Chrome/124.0.0.0 Safari/537.36"
+#        ),
+#        "Accept": (
+#            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+#            "image/avif,image/webp,*/*;q=0.8"
+#        ),
+#        "Accept-Language": "en-US,en;q=0.9",
+#        "Accept-Encoding": "gzip, deflate, br",
+#        "Connection": "keep-alive",
+#        "Referer": "https://atamartialarts.com/myata/",
+#        "Sec-Fetch-Site": "same-origin",
+#        "Sec-Fetch-Mode": "navigate",
+#        "Sec-Fetch-Dest": "document",
+#        "Sec-Fetch-User": "?1",
+#        "Upgrade-Insecure-Requests": "1",
+#    }
+
+#    try:
+#        r = SESSION.get(url, headers=headers, timeout=12)
+#
+#        # ⭐ DEBUG: PRINT FULL HTML
+#        st.write("DEBUG: FULL HTML OUTPUT BELOW")
+#        st.code(r.text)
+
+#        if r.status_code == 200:
+#            return r.text
+
+#    except Exception as e:
+#        st.write("DEBUG ERROR:", e)
+#        return None
+
+#    return None
 
 
 #def fetch_html(url: str):
