@@ -666,6 +666,23 @@ def parse_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
 
+    # ⭐ DEBUG: Count tables
+    tables = soup.find_all("table")
+    st.write("DEBUG: Number of tables found:", len(tables))
+
+    for i, t in enumerate(tables):
+        st.write(f"DEBUG: Table {i} preview:")
+        st.code(str(t)[:200])
+
+    # ⭐ DEBUG: Count headers
+    headers = soup.find_all("ul", class_="tournament-header")
+    st.write("DEBUG: Number of headers found:", len(headers))
+
+    for i, h in enumerate(headers):
+        st.write(f"DEBUG: Header {i} text:")
+        st.code(h.get_text(strip=True))
+
+    # Province name → abbreviation
     PROVINCE_NAME_TO_ABBREV = {
         "Alberta": "AB",
         "British Columbia": "BC",
@@ -679,11 +696,10 @@ def parse_standings(html: str):
         "Saskatchewan": "SK",
     }
 
-    # Find all event headers
-    headers = soup.find_all("ul", class_="tournament-header")
-
+    # ⭐ NEW PARSER LOGIC
+    # We do NOT use zip(headers, tables) anymore.
+    # We find the table *after* each header.
     for header in headers:
-        # Extract event name
         evt = header.find("span", class_="text-primary text-uppercase")
         if not evt:
             continue
@@ -694,6 +710,8 @@ def parse_standings(html: str):
 
         # ⭐ FIX: Find the NEXT table after this header
         table = header.find_next("table")
+        st.write(f"DEBUG: For event {ev_name}, table found:", bool(table))
+
         if not table:
             continue
 
@@ -716,7 +734,9 @@ def parse_standings(html: str):
             if pts_val <= 0:
                 continue
 
+            loc = loc.strip()
             loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+
             if "," in loc_norm:
                 town, region_part = loc_norm.split(",", 1)
             else:
