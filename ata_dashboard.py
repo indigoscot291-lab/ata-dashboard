@@ -663,9 +663,19 @@ def parse_standings(html: str):
 
     return data
 
+#def is_login_wall(html: str) -> bool:
+#    if not html:
+#        return True
+#    text = html.lower()
+#    return ("sign in" in text and "myata" in text) or ("login" in text and "myata" in text)
 def is_login_wall(html: str) -> bool:
     if not html:
         return True
+
+    # ⭐ DEBUG
+    st.write("DEBUG: Checking login wall…")
+    st.code(html[:500])
+
     text = html.lower()
     return ("sign in" in text and "myata" in text) or ("login" in text and "myata" in text)
 
