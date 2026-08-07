@@ -565,6 +565,23 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
 def parse_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
+    # ⭐ DEBUG: Count tables
+    tables = soup.find_all("table")
+    st.write("DEBUG: Number of tables found:", len(tables))
+
+    # ⭐ DEBUG: Show first 200 chars of each table
+    for i, t in enumerate(tables):
+        st.write(f"DEBUG: Table {i} preview:")
+        st.code(str(t)[:200])
+
+    # ⭐ DEBUG: Count headers
+    headers = soup.find_all("ul", class_="tournament-header")
+    st.write("DEBUG: Number of headers found:", len(headers))
+
+    # ⭐ DEBUG: Show each header text
+    for i, h in enumerate(headers):
+        st.write(f"DEBUG: Header {i} text:")
+        st.code(h.get_text(strip=True))
 
     # Province name → abbreviation
     PROVINCE_NAME_TO_ABBREV = {
