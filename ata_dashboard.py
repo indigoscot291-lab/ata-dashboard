@@ -214,7 +214,7 @@ def fetch_html_v2(url: str):
     try:
         r = SESSION.get(url, headers=headers, timeout=15)
         print(r.text[:500])
-		if r.status_code == 200:
+        if r.status_code == 200:
             return r.text
     except:
         return None
