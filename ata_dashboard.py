@@ -772,25 +772,13 @@ def fetch_sheet(sheet_url: str) -> pd.DataFrame:
 #            })
 
 #    return data
+
 def parse_standings(html: str):
     soup = BeautifulSoup(html, "html.parser")
     data = {ev: [] for ev in EVENT_NAMES}
 
-    # ⭐ DEBUG: Count tables
-    tables = soup.find_all("table")
-    #st.write("DEBUG: Number of tables found:", len(tables))
-
-    #for i, t in enumerate(tables):
-    #    st.write(f"DEBUG: Table {i} preview:")
-        st.code(str(t)[:200])
-
-    # ⭐ DEBUG: Count headers
+    # Find all event headers
     headers = soup.find_all("ul", class_="tournament-header")
-    #st.write("DEBUG: Number of headers found:", len(headers))
-
-    #for i, h in enumerate(headers):
-    #    st.write(f"DEBUG: Header {i} text:")
-    #    st.code(h.get_text(strip=True))
 
     # Province name → abbreviation
     PROVINCE_NAME_TO_ABBREV = {
@@ -806,9 +794,7 @@ def parse_standings(html: str):
         "Saskatchewan": "SK",
     }
 
-    # ⭐ NEW PARSER LOGIC
-    # We do NOT use zip(headers, tables) anymore.
-    # We find the table *after* each header.
+    # Parse each event section
     for header in headers:
         evt = header.find("span", class_="text-primary text-uppercase")
         if not evt:
@@ -818,10 +804,8 @@ def parse_standings(html: str):
         if ev_name not in EVENT_NAMES:
             continue
 
-        # ⭐ FIX: Find the NEXT table after this header
+        # Find the table immediately following this header
         table = header.find_next("table")
-        #st.write(f"DEBUG: For event {ev_name}, table found:", bool(table))
-
         if not table:
             continue
 
@@ -836,6 +820,7 @@ def parse_standings(html: str):
 
             rank_s, name, pts_s, loc = cols
 
+            # Points must be an integer > 0
             try:
                 pts_val = int(pts_s)
             except:
@@ -844,8 +829,8 @@ def parse_standings(html: str):
             if pts_val <= 0:
                 continue
 
-            loc = loc.strip()
-            loc_norm = loc.replace(", ", ",").replace(" ,", ",")
+            # Normalize location
+            loc_norm = loc.strip().replace(", ", ",").replace(" ,", ",")
 
             if "," in loc_norm:
                 town, region_part = loc_norm.split(",", 1)
@@ -861,6 +846,7 @@ def parse_standings(html: str):
             town = town.strip()
             region_part = region_part.strip()
 
+            # Convert province names → abbreviations
             if region_part.title() in PROVINCE_NAME_TO_ABBREV:
                 state_abbrev = PROVINCE_NAME_TO_ABBREV[region_part.title()]
             else:
@@ -876,6 +862,7 @@ def parse_standings(html: str):
             })
 
     return data
+
 
 #def is_login_wall(html: str) -> bool:
 #    if not html:
