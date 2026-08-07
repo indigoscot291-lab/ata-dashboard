@@ -777,20 +777,20 @@ def parse_standings(html: str):
     data = {ev: [] for ev in EVENT_NAMES}
 
     # ⭐ DEBUG: Count tables
-    tables = soup.find_all("table")
-    st.write("DEBUG: Number of tables found:", len(tables))
+    #tables = soup.find_all("table")
+    #st.write("DEBUG: Number of tables found:", len(tables))
 
-    for i, t in enumerate(tables):
-        st.write(f"DEBUG: Table {i} preview:")
-        st.code(str(t)[:200])
+    #for i, t in enumerate(tables):
+    #    st.write(f"DEBUG: Table {i} preview:")
+    #    st.code(str(t)[:200])
 
     # ⭐ DEBUG: Count headers
-    headers = soup.find_all("ul", class_="tournament-header")
-    st.write("DEBUG: Number of headers found:", len(headers))
+    #headers = soup.find_all("ul", class_="tournament-header")
+    #st.write("DEBUG: Number of headers found:", len(headers))
 
-    for i, h in enumerate(headers):
-        st.write(f"DEBUG: Header {i} text:")
-        st.code(h.get_text(strip=True))
+    #for i, h in enumerate(headers):
+    #    st.write(f"DEBUG: Header {i} text:")
+    #    st.code(h.get_text(strip=True))
 
     # Province name → abbreviation
     PROVINCE_NAME_TO_ABBREV = {
@@ -820,7 +820,7 @@ def parse_standings(html: str):
 
         # ⭐ FIX: Find the NEXT table after this header
         table = header.find_next("table")
-        st.write(f"DEBUG: For event {ev_name}, table found:", bool(table))
+        #st.write(f"DEBUG: For event {ev_name}, table found:", bool(table))
 
         if not table:
             continue
