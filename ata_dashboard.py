@@ -782,7 +782,7 @@ def parse_standings(html: str):
 
     #for i, t in enumerate(tables):
     #    st.write(f"DEBUG: Table {i} preview:")
-		st.code(str(t)[:200])
+        st.code(str(t)[:200])
 
     # ⭐ DEBUG: Count headers
     headers = soup.find_all("ul", class_="tournament-header")
