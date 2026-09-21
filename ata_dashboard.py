@@ -41,7 +41,7 @@ GROUPS = {
         "code": "WCOD",
         "world_url": "https://atamartialarts.com/myata/tournament-standings/worlds-standings/?code=WCOD",
         "state_url_template": "https://atamartialarts.com/myata/tournament-standings/state-standings/?country={}&state={}&code={}",
-        "sheet_url": None
+        "sheet_url": "https://docs.google.com/spreadsheets/d/1V-A8syPjVSr6vPFrR86KbbDwyzS-7b2hXcyfYNfOOw4/export?format=csv"
     },
     "2nd/3rd Degree Black Belt Women 40-49": {
         "code": "W23C",
