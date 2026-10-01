@@ -1928,7 +1928,7 @@ elif page_choice == "National & District Rings":
             #RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/152UB3oPC3J82ZoRT6XGla8CSny5aGkScTxV_cEa82Y4/gviz/tq?tqx=out:csv&gid=83796966"
             #RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQlZFFS5keWU6Q65fbtQRUtG-f90a37Q80ZcVRGtmKEEgA4RvJbXx8yp3eIhk6kiQ/pub?output=csv"
             RINGS_CSV_URL = "https://docs.google.com/spreadsheets/d/1N-E6jFaOgJvZyGm8YMzoUCYPpAwynf_ZCtjgsU_opWo/pub?output=csv"
-			MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
+            MEMBERS_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aKKUuMbz71NwRZR-lKdVo52X3sE-XgOJjRyhvlshOdM/export?format=csv"
             
             # Load Rings sheet
             try:
