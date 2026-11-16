@@ -506,6 +506,9 @@ def run_score_auditor():
     common_names = sorted(
         ata_names & sheet_names
     )
+	st.write("ATA Names:", len(ata_names))
+	st.write("Sheet Names:", len(sheet_names))
+	st.write("Common Names:", len(common_names))
 
     mismatch_rows = []
     summary_rows = []
@@ -562,10 +565,17 @@ def run_score_auditor():
                 largest_diff
         })
 
-    summary_df = pd.DataFrame(
-        summary_rows
-    )
-
+    #summary_df = pd.DataFrame(
+    #    summary_rows
+    #)
+	summary_df = pd.DataFrame(
+    	summary_rows,
+    	columns=[
+        	"Name",
+        	"Status",
+        	"Largest Difference"
+    	]
+	)	
     mismatch_df = pd.DataFrame(
         mismatch_rows
     )
