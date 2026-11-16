@@ -3935,7 +3935,7 @@ if page_choice == "Nationwide State Champions (All Divisions)":
         )
 
 if page_choice == "ATA Score Auditor":
-	run_score_auditor
+	run_score_auditor()
 	
 def run_score_auditor():
 
