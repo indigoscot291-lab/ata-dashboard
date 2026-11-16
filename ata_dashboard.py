@@ -122,7 +122,100 @@ MATRIX_SHEET_URL_V2 = (
     "1I6rKmEwf5YR7knC404v2hKH0ZzPu1Xr_mtQeLRW_ymA/"
     "export?format=csv&gid=0"
 )
+def assign_weekend_ids(dates):
+    s = (
+        pd.to_datetime(dates, errors="coerce")
+        .dropna()
+        .dt.normalize()
+        .sort_values()
+        .unique()
+    )
 
+    if len(s) == 0:
+        return pd.Series(index=dates.index, dtype="Int64")
+
+    cluster_id = 0
+    mapping = {}
+    prev = None
+
+    for d in s:
+        if prev is None or (d - prev).days > 1:
+            cluster_id += 1
+
+        mapping[d] = cluster_id
+        prev = d
+
+    normalized = pd.to_datetime(
+        dates,
+        errors="coerce"
+    ).dt.normalize()
+
+    return normalized.map(mapping)
+
+
+def bestN_sum(values, n):
+    return sum(sorted(values, reverse=True)[:n])
+
+
+def aa_current_weekend_values(df, event):
+    if df.empty:
+        return []
+
+    work = df.copy()
+    work["WeekendID"] = assign_weekend_ids(work["Date"])
+
+    return list(
+        work.groupby("WeekendID")[event]
+        .max()
+        .values
+    )
+
+
+def aplus_current_weekend_values(df, event):
+    if df.empty:
+        return []
+
+    work = df.copy()
+    work["WeekendID"] = assign_weekend_ids(work["Date"])
+
+    return list(
+        work.groupby("WeekendID")[event]
+        .max()
+        .values
+    )
+
+
+def ab_current_weekend_values(df, event):
+    if df.empty:
+        return []
+
+    work = df.copy()
+    work["WeekendID"] = assign_weekend_ids(work["Date"])
+
+    return list(
+        work.groupby("WeekendID")[event]
+        .max()
+        .values
+    )
+
+
+def norm_type(x):
+    s = str(x).strip().lower()
+
+    if "aaa" in s:
+        return "AAA"
+    elif ("aa" in s and "aaa" not in s):
+        return "AA"
+    elif "a+" in s:
+        return "A+"
+    elif "class a" in s or s == "a":
+        return "A"
+    elif "class b" in s or s == "b":
+        return "B"
+    elif "class c" in s or s == "c":
+        return "C"
+
+    return None	
 @st.cache_data(ttl=3600)
 def load_matrix_groups_v2():
     try:
@@ -281,118 +374,112 @@ def run_score_auditor():
 
     def calculate_event_total(cdf, event):
 
-        cdf = cdf.copy()
+    work = cdf.copy()
 
-        cdf[event] = pd.to_numeric(
-            cdf[event],
-            errors="coerce"
-        ).fillna(0)
+    work[event] = pd.to_numeric(
+        work[event],
+        errors="coerce"
+    ).fillna(0)
 
-        aaa_total = min(
-            cdf.loc[
-                cdf["Type"] == "AAA",
-                event
-            ].sum(),
-            20
+    # AAA (max 20)
+
+    aaa_total = min(
+        work.loc[
+            work["TypeNorm"] == "AAA",
+            event
+        ].sum(),
+        20
+    )
+
+    # AA (best 2 weekends, max 30)
+
+    aa_df = work.loc[
+        work["TypeNorm"] == "AA"
+    ].copy()
+
+    if not aa_df.empty:
+
+        aa_df["WeekendID"] = assign_weekend_ids(
+            aa_df["Date"]
         )
-
-        aa_df = cdf.loc[
-            cdf["Type"] == "AA",
-            ["Date", event]
-        ].copy()
-
-        if not aa_df.empty:
-
-            aa_df["WeekendID"] = assign_weekend_ids(
-                aa_df["Date"]
-            )
-
-            aa_values = (
-                aa_df.groupby("WeekendID")[event]
-                .max()
-                .tolist()
-            )
-
-        else:
-
-            aa_values = []
 
         aa_total = min(
-            sum(sorted(aa_values, reverse=True)[:2]),
+            aa_df.groupby("WeekendID")[event]
+            .max()
+            .sort_values(ascending=False)
+            .head(2)
+            .sum(),
             30
         )
+    else:
+        aa_total = 0
 
-        ap_df = cdf.loc[
-            cdf["Type"] == "A+",
-            ["Date", event]
-        ].copy()
+    # A+ (best 2 weekends, max 24)
 
-        if not ap_df.empty:
+    ap_df = work.loc[
+        work["TypeNorm"] == "A+"
+    ].copy()
 
-            ap_df["WeekendID"] = assign_weekend_ids(
-                ap_df["Date"]
-            )
+    if not ap_df.empty:
 
-            ap_values = (
-                ap_df.groupby("WeekendID")[event]
-                .max()
-                .tolist()
-            )
-
-        else:
-
-            ap_values = []
+        ap_df["WeekendID"] = assign_weekend_ids(
+            ap_df["Date"]
+        )
 
         ap_total = min(
-            sum(sorted(ap_values, reverse=True)[:2]),
+            ap_df.groupby("WeekendID")[event]
+            .max()
+            .sort_values(ascending=False)
+            .head(2)
+            .sum(),
             24
         )
+    else:
+        ap_total = 0
 
-        ab_df = cdf.loc[
-            cdf["Type"].isin(["A", "B"]),
-            ["Date", event]
-        ].copy()
+    # A/B (best 5 weekends, max 40)
 
-        if not ab_df.empty:
+    ab_df = work.loc[
+        work["TypeNorm"].isin(["A", "B"])
+    ].copy()
 
-            ab_df["WeekendID"] = assign_weekend_ids(
-                ab_df["Date"]
-            )
+    if not ab_df.empty:
 
-            ab_values = (
-                ab_df.groupby("WeekendID")[event]
-                .max()
-                .tolist()
-            )
-
-        else:
-
-            ab_values = []
+        ab_df["WeekendID"] = assign_weekend_ids(
+            ab_df["Date"]
+        )
 
         ab_total = min(
-            sum(sorted(ab_values, reverse=True)[:5]),
+            ab_df.groupby("WeekendID")[event]
+            .max()
+            .sort_values(ascending=False)
+            .head(5)
+            .sum(),
             40
         )
+    else:
+        ab_total = 0
 
-        c_total = min(
-            cdf.loc[
-                cdf["Type"] == "C",
-                event
-            ]
-            .sort_values(ascending=False)
-            .head(3)
-            .sum(),
-            9
-        )
+    # C (best 3 scores, max 9)
 
-        return (
-            aaa_total
-            + aa_total
-            + ap_total
-            + ab_total
-            + c_total
-        )
+    c_total = min(
+        work.loc[
+            work["TypeNorm"] == "C",
+            event
+        ]
+        .sort_values(ascending=False)
+        .head(3)
+        .sum(),
+        9
+    )
 
+    return (
+        aaa_total +
+        aa_total +
+        ap_total +
+        ab_total +
+        c_total
+    )
     # =====================================================
     # BUILD SPREADSHEET TOTALS
     # =====================================================
