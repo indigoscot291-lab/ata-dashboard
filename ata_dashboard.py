@@ -181,7 +181,7 @@ def run_score_auditor():
         )
 
         ata_data = dedupe_and_rank(ata_data)
-	    st.write("ATA DATA")
+        st.write("ATA DATA")
         st.write(ata_data)
 
     # =====================================================
