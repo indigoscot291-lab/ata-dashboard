@@ -168,31 +168,64 @@ def run_score_auditor():
     if not st.button("Run Audit"):
         return
 
+    EVENTS = EVENT_NAMES
+
+    def clean_name(name):
+        return str(name).strip().lower()
+
     # =====================================================
-    # LOAD ATA DATA
+    # LOAD ATA DATA USING EXISTING WORKING CODE
     # =====================================================
 
     with st.spinner("Loading ATA standings..."):
 
-        ata_data, _ = gather_data(
+        raw_data, has_results = gather_data(
             group_choice,
             "All",
             ""
         )
 
-        ata_data = dedupe_and_rank(ata_data)
-        st.write("ATA DATA")
-        st.write(ata_data)
+        if not has_results:
+            st.error("No ATA standings returned.")
+            return
+
+        ata_data = dedupe_and_rank(raw_data)
+
+    # =====================================================
+    # BUILD ATA DATAFRAME
+    # =====================================================
+
+    ata_rows = []
+
+    for event, rows in ata_data.items():
+
+        for row in rows:
+
+            ata_rows.append({
+                "Name": clean_name(row["Name"]),
+                "DisplayName": row["Name"],
+                "Event": event,
+                "ATA Points": float(
+                    pd.to_numeric(
+                        row.get("Points", 0),
+                        errors="coerce"
+                    )
+                )
+            })
+
+    ata_df = pd.DataFrame(ata_rows)
+
+    if ata_df.empty:
+        st.error("No ATA data found.")
+        return
 
     # =====================================================
     # LOAD SPREADSHEET
     # =====================================================
 
-    with st.spinner("Loading Spreadsheet..."):
-
-        spreadsheet_df = fetch_sheet(
-            GROUPS[group_choice]["sheet_url"]
-        )
+    spreadsheet_df = fetch_sheet(
+        GROUPS[group_choice]["sheet_url"]
+    )
 
     if spreadsheet_df.empty:
         st.error("No spreadsheet data found.")
@@ -208,54 +241,9 @@ def run_score_auditor():
         errors="coerce"
     )
 
-    EVENTS = [
-        "Forms",
-        "Weapons",
-        "Combat Weapons",
-        "Sparring",
-        "Creative Forms",
-        "Creative Weapons",
-        "X-Treme Forms",
-        "X-Treme Weapons"
-    ]
-
-    def clean_name(name):
-        return str(name).strip().lower()
-
     # =====================================================
     # WEEKEND GROUPING
     # =====================================================
-
-    def assign_weekend_ids(dates):
-
-        dates = (
-            pd.to_datetime(dates, errors="coerce")
-            .dropna()
-            .dt.normalize()
-            .sort_values()
-            .unique()
-        )
-
-        mapping = {}
-
-        previous = None
-        weekend_id = 0
-
-        for d in dates:
-
-            if previous is None or (d - previous).days > 1:
-                weekend_id += 1
-
-            mapping[d] = weekend_id
-            previous = d
-
-        normalized = pd.to_datetime(
-            dates=pd.Series(dates)
-        )
-
-        return pd.to_datetime(
-            pd.Series(dates)
-        )
 
     def assign_weekend_ids(series):
 
@@ -280,15 +268,15 @@ def run_score_auditor():
             weekend_map[d] = current_weekend
             previous = d
 
-        normalized = pd.to_datetime(
-            series,
-            errors="coerce"
-        ).dt.normalize()
+        normalized = (
+            pd.to_datetime(series, errors="coerce")
+            .dt.normalize()
+        )
 
         return normalized.map(weekend_map)
 
     # =====================================================
-    # CALCULATE ATA TOTALS
+    # EXISTING ATA SCORING LOGIC
     # =====================================================
 
     def calculate_event_total(cdf, event):
@@ -300,10 +288,6 @@ def run_score_auditor():
             errors="coerce"
         ).fillna(0)
 
-        # ----------------------
-        # AAA
-        # ----------------------
-
         aaa_total = min(
             cdf.loc[
                 cdf["Type"] == "AAA",
@@ -311,10 +295,6 @@ def run_score_auditor():
             ].sum(),
             20
         )
-
-        # ----------------------
-        # AA
-        # ----------------------
 
         aa_df = cdf.loc[
             cdf["Type"] == "AA",
@@ -338,18 +318,9 @@ def run_score_auditor():
             aa_values = []
 
         aa_total = min(
-            sum(
-                sorted(
-                    aa_values,
-                    reverse=True
-                )[:2]
-            ),
+            sum(sorted(aa_values, reverse=True)[:2]),
             30
         )
-
-        # ----------------------
-        # A+
-        # ----------------------
 
         ap_df = cdf.loc[
             cdf["Type"] == "A+",
@@ -373,18 +344,9 @@ def run_score_auditor():
             ap_values = []
 
         ap_total = min(
-            sum(
-                sorted(
-                    ap_values,
-                    reverse=True
-                )[:2]
-            ),
+            sum(sorted(ap_values, reverse=True)[:2]),
             24
         )
-
-        # ----------------------
-        # A/B
-        # ----------------------
 
         ab_df = cdf.loc[
             cdf["Type"].isin(["A", "B"]),
@@ -408,305 +370,172 @@ def run_score_auditor():
             ab_values = []
 
         ab_total = min(
-            sum(
-                sorted(
-                    ab_values,
-                    reverse=True
-                )[:5]
-            ),
+            sum(sorted(ab_values, reverse=True)[:5]),
             40
         )
-
-        # ----------------------
-        # CLASS C
-        # ----------------------
 
         c_total = min(
             cdf.loc[
                 cdf["Type"] == "C",
                 event
             ]
-            .sort_values(
-                ascending=False
-            )
+            .sort_values(ascending=False)
             .head(3)
             .sum(),
             9
         )
 
         return (
-            aaa_total +
-            aa_total +
-            ap_total +
-            ab_total +
-            c_total
+            aaa_total
+            + aa_total
+            + ap_total
+            + ab_total
+            + c_total
         )
 
     # =====================================================
     # BUILD SPREADSHEET TOTALS
     # =====================================================
 
-    spreadsheet_lookup = {}
+    calc_rows = []
 
     for competitor, cdf in spreadsheet_df.groupby("Name"):
 
         if pd.isna(competitor):
             continue
 
-        competitor_key = clean_name(
-            competitor
-        )
-
-        spreadsheet_lookup[
-            competitor_key
-        ] = {}
-
         for event in EVENTS:
 
-            spreadsheet_lookup[
-                competitor_key
-            ][event] = calculate_event_total(
-                cdf,
-                event
-            )
+            calc_rows.append({
+                "Name": clean_name(competitor),
+                "DisplayName": competitor,
+                "Event": event,
+                "Spreadsheet Points":
+                    calculate_event_total(
+                        cdf,
+                        event
+                    )
+            })
 
-    # =====================================================
-    # BUILD ATA TOTALS
-    # =====================================================
-
-    ata_lookup = {}
-
-    for event, rows in ata_data.items():
-
-        for row in rows:
-
-            competitor = clean_name(
-                row["Name"]
-            )
-
-            if competitor not in ata_lookup:
-                ata_lookup[competitor] = {}
-
-            ata_lookup[competitor][event] = float(
-                pd.to_numeric(
-                    row.get("Points", 0),
-                    errors="coerce"
-                ) or 0
-            )
-
-    ata_names = set(ata_lookup.keys())
-    sheet_names = set(spreadsheet_lookup.keys())
-
-    missing_from_ata = sorted(
-        sheet_names - ata_names
-    )
-
-    missing_from_sheet = sorted(
-        ata_names - sheet_names
-    )
-
-    common_names = sorted(
-        ata_names & sheet_names
-    )
-    st.write("ATA Names:", len(ata_names))
-    st.write("Sheet Names:", len(sheet_names))
-    st.write("Common Names:", len(common_names))
-
-    mismatch_rows = []
-    summary_rows = []
+    calc_df = pd.DataFrame(calc_rows)
 
     # =====================================================
     # COMPARE
     # =====================================================
 
-    for name in common_names:
-
-        mismatch = False
-        largest_diff = 0
-
-        for event in EVENTS:
-
-            ata_score = (
-                ata_lookup
-                .get(name, {})
-                .get(event, 0)
-            )
-
-            sheet_score = (
-                spreadsheet_lookup
-                .get(name, {})
-                .get(event, 0)
-            )
-
-            diff = sheet_score - ata_score
-
-            if diff != 0:
-
-                mismatch = True
-
-                mismatch_rows.append({
-                    "Name": name.title(),
-                    "Event": event,
-                    "Spreadsheet": sheet_score,
-                    "ATA": ata_score,
-                    "Difference": diff
-                })
-
-            largest_diff = max(
-                largest_diff,
-                abs(diff)
-            )
-
-        summary_rows.append({
-            "Name": name.title(),
-            "Status":
-                "Mismatch"
-                if mismatch
-                else "Match",
-            "Largest Difference":
-                largest_diff
-        })
-
-    #summary_df = pd.DataFrame(
-    #    summary_rows
-    #)
-    summary_df = pd.DataFrame(
-        summary_rows,
-        columns=[
+    comparison_df = ata_df.merge(
+        calc_df[
+            [
+                "Name",
+                "Event",
+                "Spreadsheet Points"
+            ]
+        ],
+        on=[
             "Name",
-            "Status",
-            "Largest Difference"
-        ]
-    )	
-    mismatch_df = pd.DataFrame(
-        mismatch_rows
+            "Event"
+        ],
+        how="outer"
     )
+
+    comparison_df["ATA Points"] = (
+        comparison_df["ATA Points"]
+        .fillna(0)
+    )
+
+    comparison_df["Spreadsheet Points"] = (
+        comparison_df["Spreadsheet Points"]
+        .fillna(0)
+    )
+
+    comparison_df["Difference"] = (
+        comparison_df["Spreadsheet Points"]
+        - comparison_df["ATA Points"]
+    )
+
+    mismatches = comparison_df[
+        comparison_df["Difference"] != 0
+    ].copy()
+
+    # =====================================================
+    # SUMMARY
+    # =====================================================
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric(
+            "Comparisons",
+            len(comparison_df)
+        )
+
+    with col2:
+        st.metric(
+            "Mismatches",
+            len(mismatches)
+        )
+
+    if mismatches.empty:
+
+        st.success(
+            "✅ Spreadsheet totals match ATA standings."
+        )
+
+        return
 
     # =====================================================
     # DISPLAY
     # =====================================================
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "Summary",
-        "Mismatches",
-        "Missing From ATA",
-        "Missing From Spreadsheet"
-    ])
+    st.dataframe(
+        mismatches.sort_values(
+            [
+                "DisplayName",
+                "Event"
+            ]
+        ),
+        use_container_width=True,
+        hide_index=True
+    )
 
-    with tab1:
-
-        st.metric(
-            "Competitors Compared",
-            len(common_names)
-        )
-
-        st.metric(
-            "Score Mismatches",
-            len(
-                summary_df[
-                    summary_df["Status"]
-                    == "Mismatch"
-                ]
-            )
-        )
-
-        st.dataframe(
-            summary_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    with tab2:
-
-        if mismatch_df.empty:
-
-            st.success(
-                "✅ Spreadsheet matches ATA standings."
-            )
-
-        else:
-
-            st.dataframe(
-                mismatch_df,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.download_button(
-                "Download CSV",
-                mismatch_df.to_csv(
-                    index=False
-                ),
-                file_name="audit_mismatches.csv",
-                mime="text/csv"
-            )
-
-    with tab3:
-
-        st.dataframe(
-            pd.DataFrame({
-                "Name":
-                missing_from_ata
-            }),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    with tab4:
-
-        st.dataframe(
-            pd.DataFrame({
-                "Name":
-                missing_from_sheet
-            }),
-            use_container_width=True,
-            hide_index=True
-        )
+    st.download_button(
+        "Download Audit CSV",
+        mismatches.to_csv(index=False),
+        file_name="audit_mismatches.csv",
+        mime="text/csv"
+    )
 
     # =====================================================
     # DETAIL VIEW
     # =====================================================
 
-    st.divider()
+    competitors = sorted(
+        comparison_df["Name"]
+        .dropna()
+        .unique()
+    )
 
-    if common_names:
+    selected = st.selectbox(
+        "Competitor Detail",
+        competitors
+    )
 
-        selected = st.selectbox(
-            "Competitor Detail",
-            common_names
-        )
+    detail_df = comparison_df[
+        comparison_df["Name"] == selected
+    ].copy()
 
-        detail_rows = []
-
-        for event in EVENTS:
-
-            ata_score = (
-                ata_lookup
-                .get(selected, {})
-                .get(event, 0)
-            )
-
-            sheet_score = (
-                spreadsheet_lookup
-                .get(selected, {})
-                .get(event, 0)
-            )
-
-            detail_rows.append({
-                "Event": event,
-                "Spreadsheet": sheet_score,
-                "ATA": ata_score,
-                "Difference":
-                    sheet_score - ata_score
-            })
-
-        st.dataframe(
-            pd.DataFrame(
-                detail_rows
-            ),
-            use_container_width=True,
-            hide_index=True
-        )
+    st.dataframe(
+        detail_df[
+            [
+                "Event",
+                "ATA Points",
+                "Spreadsheet Points",
+                "Difference"
+            ]
+        ].sort_values("Event"),
+        use_container_width=True,
+        hide_index=True
+    )
 MATRIX_GROUPS = load_matrix_groups_v2()
 
 # New fetch function only for District and World Qualifiers
