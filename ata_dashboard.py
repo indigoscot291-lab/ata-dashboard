@@ -377,111 +377,111 @@ def run_score_auditor():
     # EXISTING ATA SCORING LOGIC
     # =====================================================
 
-def calculate_event_total(cdf, event):
+    def calculate_event_total(cdf, event):
 
-    work = cdf.copy()
+        work = cdf.copy()
 
-    work[event] = pd.to_numeric(
-        work[event],
-        errors="coerce"
-    ).fillna(0)
+        work[event] = pd.to_numeric(
+            work[event],
+            errors="coerce"
+        ).fillna(0)
 
-    # AAA (max 20)
-    aaa_total = min(
-        work.loc[
-            work["TypeNorm"] == "AAA",
-            event
-        ].sum(),
-        20
-    )
-
-    # AA (best 2 weekends, max 30)
-    aa_df = work.loc[
-        work["TypeNorm"] == "AA"
-    ].copy()
-
-    if not aa_df.empty:
-
-        aa_df["WeekendID"] = assign_weekend_ids(
-            aa_df["Date"]
+        # AAA (max 20)
+        aaa_total = min(
+            work.loc[
+                work["TypeNorm"] == "AAA",
+                event
+            ].sum(),
+            20
         )
 
-        aa_total = min(
-            aa_df.groupby("WeekendID")[event]
-            .max()
-            .nlargest(2)
+        # AA (best 2 weekends, max 30)
+        aa_df = work.loc[
+            work["TypeNorm"] == "AA"
+        ].copy()
+
+        if not aa_df.empty:
+
+            aa_df["WeekendID"] = assign_weekend_ids(
+                aa_df["Date"]
+            )
+
+            aa_total = min(
+                aa_df.groupby("WeekendID")[event]
+                .max()
+                .nlargest(2)
+                .sum(),
+                30
+            )
+
+        else:
+
+            aa_total = 0
+
+        # A+ (best 2 weekends, max 24)
+        ap_df = work.loc[
+            work["TypeNorm"] == "A+"
+        ].copy()
+
+        if not ap_df.empty:
+
+            ap_df["WeekendID"] = assign_weekend_ids(
+                ap_df["Date"]
+            )
+
+            ap_total = min(
+                ap_df.groupby("WeekendID")[event]
+                .max()
+                .nlargest(2)
+                .sum(),
+                24
+            )
+
+        else:
+
+            ap_total = 0
+
+        # A/B (best 5 weekends, max 40)
+        ab_df = work.loc[
+            work["TypeNorm"].isin(["A", "B"])
+        ].copy()
+
+        if not ab_df.empty:
+
+            ab_df["WeekendID"] = assign_weekend_ids(
+                ab_df["Date"]
+            )
+
+            ab_total = min(
+                ab_df.groupby("WeekendID")[event]
+                .max()
+                .nlargest(5)
+                .sum(),
+                40
+            )
+
+        else:
+
+            ab_total = 0
+
+        # C (best 3 scores, max 9)
+        c_total = min(
+            work.loc[
+                work["TypeNorm"] == "C",
+                event
+            ]
+            .nlargest(3)
             .sum(),
-            30
+            9
         )
 
-    else:
-
-        aa_total = 0
-
-    # A+ (best 2 weekends, max 24)
-    ap_df = work.loc[
-        work["TypeNorm"] == "A+"
-    ].copy()
-
-    if not ap_df.empty:
-
-        ap_df["WeekendID"] = assign_weekend_ids(
-            ap_df["Date"]
-        )
-
-        ap_total = min(
-            ap_df.groupby("WeekendID")[event]
-            .max()
-            .nlargest(2)
-            .sum(),
-            24
-        )
-
-    else:
-
-        ap_total = 0
-
-    # A/B (best 5 weekends, max 40)
-    ab_df = work.loc[
-        work["TypeNorm"].isin(["A", "B"])
-    ].copy()
-
-    if not ab_df.empty:
-
-        ab_df["WeekendID"] = assign_weekend_ids(
-            ab_df["Date"]
-        )
-
-        ab_total = min(
-            ab_df.groupby("WeekendID")[event]
-            .max()
-            .nlargest(5)
-            .sum(),
-            40
-        )
-
-    else:
-
-        ab_total = 0
-
-    # C (best 3 scores, max 9)
-    c_total = min(
-        work.loc[
-            work["TypeNorm"] == "C",
-            event
-        ]
-        .nlargest(3)
-        .sum(),
-        9
-    )
-
-    return (
-        aaa_total
-        + aa_total
-        + ap_total
-        + ab_total
-        + c_total
-    )
+        return (
+            aaa_total
+            + aa_total
+            + ap_total
+            + ab_total
+            + c_total
+        )  
     # =====================================================
     # BUILD SPREADSHEET TOTALS
     # =====================================================
