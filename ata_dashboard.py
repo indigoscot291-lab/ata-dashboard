@@ -372,7 +372,7 @@ def run_score_auditor():
     # EXISTING ATA SCORING LOGIC
     # =====================================================
 
-    def calculate_event_total(cdf, event):
+def calculate_event_total(cdf, event):
 
     work = cdf.copy()
 
@@ -382,7 +382,6 @@ def run_score_auditor():
     ).fillna(0)
 
     # AAA (max 20)
-
     aaa_total = min(
         work.loc[
             work["TypeNorm"] == "AAA",
@@ -392,7 +391,6 @@ def run_score_auditor():
     )
 
     # AA (best 2 weekends, max 30)
-
     aa_df = work.loc[
         work["TypeNorm"] == "AA"
     ].copy()
@@ -406,16 +404,16 @@ def run_score_auditor():
         aa_total = min(
             aa_df.groupby("WeekendID")[event]
             .max()
-            .sort_values(ascending=False)
-            .head(2)
+            .nlargest(2)
             .sum(),
             30
         )
+
     else:
+
         aa_total = 0
 
     # A+ (best 2 weekends, max 24)
-
     ap_df = work.loc[
         work["TypeNorm"] == "A+"
     ].copy()
@@ -429,16 +427,16 @@ def run_score_auditor():
         ap_total = min(
             ap_df.groupby("WeekendID")[event]
             .max()
-            .sort_values(ascending=False)
-            .head(2)
+            .nlargest(2)
             .sum(),
             24
         )
+
     else:
+
         ap_total = 0
 
     # A/B (best 5 weekends, max 40)
-
     ab_df = work.loc[
         work["TypeNorm"].isin(["A", "B"])
     ].copy()
@@ -452,33 +450,32 @@ def run_score_auditor():
         ab_total = min(
             ab_df.groupby("WeekendID")[event]
             .max()
-            .sort_values(ascending=False)
-            .head(5)
+            .nlargest(5)
             .sum(),
             40
         )
+
     else:
+
         ab_total = 0
 
     # C (best 3 scores, max 9)
-
     c_total = min(
         work.loc[
             work["TypeNorm"] == "C",
             event
         ]
-        .sort_values(ascending=False)
-        .head(3)
+        .nlargest(3)
         .sum(),
         9
     )
 
     return (
-        aaa_total +
-        aa_total +
-        ap_total +
-        ab_total +
-        c_total
+        aaa_total
+        + aa_total
+        + ap_total
+        + ab_total
+        + c_total
     )
     # =====================================================
     # BUILD SPREADSHEET TOTALS
