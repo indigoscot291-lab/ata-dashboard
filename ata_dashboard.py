@@ -5,7 +5,7 @@ import pandas as pd
 import re
 import io
 import concurrent.futures
-from auditor import run_score_auditor
+#from auditor import run_score_auditor
 
 from ata_auth import get_myata_session
 
