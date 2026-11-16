@@ -506,9 +506,9 @@ def run_score_auditor():
     common_names = sorted(
         ata_names & sheet_names
     )
-	st.write("ATA Names:", len(ata_names))
-	st.write("Sheet Names:", len(sheet_names))
-	st.write("Common Names:", len(common_names))
+    st.write("ATA Names:", len(ata_names))
+    st.write("Sheet Names:", len(sheet_names))
+    st.write("Common Names:", len(common_names))
 
     mismatch_rows = []
     summary_rows = []
