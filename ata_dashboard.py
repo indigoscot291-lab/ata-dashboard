@@ -333,6 +333,11 @@ def run_score_auditor():
         spreadsheet_df["Date"],
         errors="coerce"
     )
+	spreadsheet_df["TypeNorm"] = (
+    	spreadsheet_df["Type"]
+    	.astype(str)
+    	.str.replace("Class ", "", regex=False)
+	)	
 
     # =====================================================
     # WEEKEND GROUPING
