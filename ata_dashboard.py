@@ -337,7 +337,29 @@ def run_score_auditor():
         spreadsheet_df["Type"]
         .astype(str)
         .str.replace("Class ", "", regex=False)
-    )	
+    )
+	st.subheader("DEBUG - Spreadsheet Rows")
+
+	debug_person = st.selectbox(
+    	"Show spreadsheet rows for competitor",
+    	sorted(
+        	spreadsheet_df["Name"]
+        	.dropna()
+        	.unique()
+    	)
+	)
+
+	debug_df = spreadsheet_df[
+    	spreadsheet_df["Name"] == debug_person
+	].copy()
+
+	debug_df = debug_df.sort_values("Date")
+
+	st.dataframe(
+    	debug_df,
+    	use_container_width=True,
+   		hide_index=True
+	)
 
     # =====================================================
     # WEEKEND GROUPING
