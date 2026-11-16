@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import io
 import concurrent.futures
+from auditor import run_score_auditor
 
 from ata_auth import get_myata_session
 
@@ -1067,6 +1068,7 @@ page_choice = st.selectbox(
         "National & District Rings",
         "Historical Titles",
         "State Champions, District & World Qualifiers (All Divisions)",
+		"ATA Score Auditor",
  #       "Nationwide State Champions (All Divisions)",
  #       "Team Sparring"
 #        "Competitor Search"
@@ -3931,3 +3933,404 @@ if page_choice == "Nationwide State Champions (All Divisions)":
             "ATA_All_State_Champions.csv",
             "text/csv"
         )
+def run_score_auditor():
+
+    st.title("🔍 ATA Score Auditor")
+
+    EVENT_MAP = {
+        "Traditional Forms": "Forms",
+        "Traditional Weapons": "Weapons",
+        "Combat Sparring": "Combat Weapons",
+        "Traditional Sparring": "Sparring",
+        "Creative Forms": "Creative Forms",
+        "Creative Weapons": "Creative Weapons",
+        "xTreme Forms": "X-Treme Forms",
+        "xTreme Weapons": "X-Treme Weapons",
+    }
+
+    TRACKER_EVENTS = list(EVENT_MAP.keys())
+
+    group_choice = st.selectbox(
+        "Division",
+        list(GROUPS.keys()),
+        key="audit_group"
+    )
+
+    if st.button("Run Audit"):
+
+        sheet_url = GROUPS[group_choice]["sheet_url"]
+
+        with st.spinner("Loading ATA standings..."):
+
+            raw_data, _ = gather_data(
+                group_choice,
+                "All",
+                ""
+            )
+
+            ata_data = dedupe_and_rank(raw_data)
+
+        with st.spinner("Loading Spreadsheet..."):
+
+            tracker_df = fetch_sheet(sheet_url)
+
+        if tracker_df.empty:
+            st.error("Spreadsheet could not be loaded.")
+            return
+
+        tracker_df.columns = tracker_df.columns.str.strip()
+
+        tracker_df["Date"] = pd.to_datetime(
+            tracker_df["Date"],
+            errors="coerce"
+        )
+
+        def norm_name(x):
+            return str(x).strip().lower()
+
+        def assign_weekend_ids(dates):
+            s = (
+                pd.to_datetime(dates, errors="coerce")
+                .dropna()
+                .dt.normalize()
+                .sort_values()
+                .unique()
+            )
+
+            mapping = {}
+
+            cluster = 0
+            prev = None
+
+            for d in s:
+
+                if prev is None or (d - prev).days > 1:
+                    cluster += 1
+
+                mapping[d] = cluster
+                prev = d
+
+            normalized = pd.to_datetime(
+                dates,
+                errors="coerce"
+            ).dt.normalize()
+
+            return normalized.map(mapping)
+
+        def bestN_sum(values, n):
+            return sum(sorted(values, reverse=True)[:n])
+
+        def calc_tracker_total(cdf, tracker_event):
+
+            cdf = cdf.copy()
+
+            cdf[tracker_event] = pd.to_numeric(
+                cdf[tracker_event],
+                errors="coerce"
+            ).fillna(0)
+
+            aaa = min(
+                cdf.loc[
+                    cdf["TypeNorm"] == "AAA",
+                    tracker_event
+                ].sum(),
+                20
+            )
+
+            aa_df = cdf.loc[
+                cdf["TypeNorm"] == "AA",
+                ["Date", tracker_event]
+            ].copy()
+
+            if not aa_df.empty:
+                aa_df["WeekendID"] = assign_weekend_ids(
+                    aa_df["Date"]
+                )
+                aa_vals = list(
+                    aa_df.groupby("WeekendID")[tracker_event]
+                    .max()
+                    .values
+                )
+            else:
+                aa_vals = []
+
+            aa_total = min(
+                bestN_sum(aa_vals, 2),
+                30
+            )
+
+            ap_df = cdf.loc[
+                cdf["TypeNorm"] == "A+",
+                ["Date", tracker_event]
+            ].copy()
+
+            if not ap_df.empty:
+                ap_df["WeekendID"] = assign_weekend_ids(
+                    ap_df["Date"]
+                )
+                ap_vals = list(
+                    ap_df.groupby("WeekendID")[tracker_event]
+                    .max()
+                    .values
+                )
+            else:
+                ap_vals = []
+
+            ap_total = min(
+                bestN_sum(ap_vals, 2),
+                24
+            )
+
+            ab_df = cdf.loc[
+                cdf["TypeNorm"].isin(["A", "B"]),
+                ["Date", tracker_event]
+            ].copy()
+
+            if not ab_df.empty:
+
+                ab_df["WeekendID"] = assign_weekend_ids(
+                    ab_df["Date"]
+                )
+
+                ab_vals = list(
+                    ab_df.groupby("WeekendID")[tracker_event]
+                    .max()
+                    .values
+                )
+            else:
+                ab_vals = []
+
+            ab_total = min(
+                bestN_sum(ab_vals, 5),
+                40
+            )
+
+            c_total = min(
+                cdf.loc[
+                    cdf["TypeNorm"] == "C",
+                    tracker_event
+                ]
+                .sort_values(ascending=False)
+                .head(3)
+                .sum(),
+                9
+            )
+
+            return (
+                aaa +
+                aa_total +
+                ap_total +
+                ab_total +
+                c_total
+            )
+
+        def norm_type(x):
+
+            s = str(x).lower()
+
+            if "aaa" in s:
+                return "AAA"
+
+            if "aa" in s and "aaa" not in s:
+                return "AA"
+
+            if "a+" in s:
+                return "A+"
+
+            if "class a" in s or s == "a":
+                return "A"
+
+            if "class b" in s or s == "b":
+                return "B"
+
+            if "class c" in s or s == "c":
+                return "C"
+
+            return None
+
+        tracker_df["TypeNorm"] = (
+            tracker_df["Type"]
+            .fillna("")
+            .apply(norm_type)
+        )
+
+        # ATA LOOKUP
+
+        ata_lookup = {}
+
+        for event_name, entries in ata_data.items():
+
+            for row in entries:
+
+                name = norm_name(row["Name"])
+
+                if name not in ata_lookup:
+                    ata_lookup[name] = {}
+
+                ata_lookup[name][event_name] = row["Points"]
+
+        # TRACKER LOOKUP
+
+        tracker_lookup = {}
+
+        for competitor in tracker_df["Name"].dropna().unique():
+
+            cdf = tracker_df[
+                tracker_df["Name"] == competitor
+            ].copy()
+
+            event_totals = {}
+
+            for tracker_event, ata_event in EVENT_MAP.items():
+
+                event_totals[ata_event] = calc_tracker_total(
+                    cdf,
+                    tracker_event
+                )
+
+            tracker_lookup[
+                norm_name(competitor)
+            ] = event_totals
+
+        ata_names = set(ata_lookup.keys())
+        tracker_names = set(tracker_lookup.keys())
+
+        missing_ata = sorted(
+            tracker_names - ata_names
+        )
+
+        missing_sheet = sorted(
+            ata_names - tracker_names
+        )
+
+        mismatch_rows = []
+        summary_rows = []
+
+        common = sorted(
+            ata_names & tracker_names
+        )
+
+        for name in common:
+
+            mismatch = False
+            largest = 0
+
+            for event in EVENT_MAP.values():
+
+                ata_score = (
+                    ata_lookup[name]
+                    .get(event, 0)
+                )
+
+                tracker_score = (
+                    tracker_lookup[name]
+                    .get(event, 0)
+                )
+
+                diff = tracker_score - ata_score
+
+                if diff != 0:
+
+                    mismatch = True
+
+                    mismatch_rows.append({
+                        "Name": name.title(),
+                        "Event": event,
+                        "Tracker": tracker_score,
+                        "ATA": ata_score,
+                        "Diff": diff
+                    })
+
+                largest = max(
+                    largest,
+                    abs(diff)
+                )
+
+            summary_rows.append({
+                "Name": name.title(),
+                "Status":
+                    "Mismatch"
+                    if mismatch
+                    else "Match",
+                "Largest Diff": largest
+            })
+
+        audit_df = pd.DataFrame(summary_rows)
+
+        mismatch_df = pd.DataFrame(mismatch_rows)
+
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "Summary",
+            "Score Mismatches",
+            "Missing From ATA",
+            "Missing From Spreadsheet"
+        ])
+
+        with tab1:
+            st.dataframe(
+                audit_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        with tab2:
+
+            if mismatch_df.empty:
+                st.success("No mismatches found.")
+            else:
+                st.dataframe(
+                    mismatch_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        with tab3:
+
+            st.dataframe(
+                pd.DataFrame(
+                    {"Name": missing_ata}
+                ),
+                use_container_width=True
+            )
+
+        with tab4:
+
+            st.dataframe(
+                pd.DataFrame(
+                    {"Name": missing_sheet}
+                ),
+                use_container_width=True
+            )
+
+        if common:
+
+            selected = st.selectbox(
+                "Competitor Detail",
+                common
+            )
+
+            detail_rows = []
+
+            for event in EVENT_MAP.values():
+
+                detail_rows.append({
+                    "Event": event,
+                    "Tracker":
+                        tracker_lookup[selected]
+                        .get(event, 0),
+                    "ATA":
+                        ata_lookup[selected]
+                        .get(event, 0),
+                    "Diff":
+                        tracker_lookup[selected]
+                        .get(event, 0)
+                        -
+                        ata_lookup[selected]
+                        .get(event, 0)
+                })
+
+            st.dataframe(
+                pd.DataFrame(detail_rows),
+                use_container_width=True,
+                hide_index=True
+            )
