@@ -3933,6 +3933,10 @@ if page_choice == "Nationwide State Champions (All Divisions)":
             "ATA_All_State_Champions.csv",
             "text/csv"
         )
+
+if page_choice == "ATA Score Auditor":
+	run_score_auditor
+	
 def run_score_auditor():
 
     st.title("🔍 ATA Score Auditor")
