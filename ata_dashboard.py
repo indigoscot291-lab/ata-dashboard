@@ -568,14 +568,14 @@ def run_score_auditor():
     #summary_df = pd.DataFrame(
     #    summary_rows
     #)
-	summary_df = pd.DataFrame(
-    	summary_rows,
-    	columns=[
-        	"Name",
-        	"Status",
-        	"Largest Difference"
-    	]
-	)	
+    summary_df = pd.DataFrame(
+        summary_rows,
+        columns=[
+            "Name",
+            "Status",
+            "Largest Difference"
+        ]
+    )	
     mismatch_df = pd.DataFrame(
         mismatch_rows
     )
