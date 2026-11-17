@@ -532,6 +532,25 @@ def run_score_auditor():
 
     calc_rows = []
 
+    #for competitor, cdf in spreadsheet_df.groupby("Name"):
+
+        #if pd.isna(competitor):
+            #continue
+
+        #for event in EVENTS:
+
+            #calc_rows.append({
+                #"Name": clean_name(competitor),
+                #"DisplayName": competitor,
+                #"Event": event,
+                #"Spreadsheet Points":
+                    #calculate_event_total(
+                        #cdf,
+                        #event
+                    #)
+            #})
+
+    #calc_df = pd.DataFrame(calc_rows)
     for competitor, cdf in spreadsheet_df.groupby("Name"):
 
         if pd.isna(competitor):
@@ -539,19 +558,23 @@ def run_score_auditor():
 
         for event in EVENTS:
 
-            calc_rows.append({
-                "Name": clean_name(competitor),
-                "DisplayName": competitor,
-                "Event": event,
-                "Spreadsheet Points":
-                    calculate_event_total(
-                        cdf,
-                        event
-                    )
-            })
+            total = calculate_event_total(
+                cdf,
+                event
+            )
 
-    calc_df = pd.DataFrame(calc_rows)
+        if competitor == "Mary Spurlock":
 
+            st.write(
+                f"{event} = {total}"
+            )
+
+        calc_rows.append({
+            "Name": clean_name(competitor),
+            "DisplayName": competitor,
+            "Event": event,
+            "Spreadsheet Points": total
+        }) 
     # =====================================================
     # COMPARE
     # =====================================================
