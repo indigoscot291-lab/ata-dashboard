@@ -496,30 +496,7 @@ def run_score_auditor():
             .sum(),
             9
         )
-    if "allyson" in str(cdf["Name"].iloc[0]).lower():
-
-        st.write(
-            f"{event}: "
-            f"AAA={aaa_total}, "
-            f"AA={aa_total}, "
-            f"A+={ap_total}, "
-            f"AB={ab_total}, "
-            f"C={c_total}"
-        )
-
-        st.dataframe(
-            work[
-                [
-                    "Date",
-                    "Tournament Name",
-                    "Type",
-                    "TypeNorm",
-                    event
-                ]    
-            ],
-            hide_index=True
-        )
-        return (
+            return (
             aaa_total
             + aa_total
             + ap_total
