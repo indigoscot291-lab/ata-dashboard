@@ -519,8 +519,8 @@ def run_score_auditor():
             .sum(),
             40
         )
-else:
-    ab_total = 0
+        else:
+            ab_total = 0
         # C (best 3 scores, max 9)
         c_total = min(
             work.loc[
