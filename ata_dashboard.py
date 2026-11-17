@@ -510,12 +510,10 @@ def run_score_auditor():
     calc_rows = []
 
     for competitor, cdf in spreadsheet_df.groupby("Name"):
-
         if pd.isna(competitor):
             continue
 
         for event in EVENTS:
-
             total = calculate_event_total(
                 cdf,
                 event
@@ -529,7 +527,13 @@ def run_score_auditor():
             })
 
     calc_df = pd.DataFrame(calc_rows)
-
+    st.write("Rows in calc_df:", len(calc_df))
+    st.dataframe(
+        calc_df.head(50),
+        use_container_width=True,
+        hide_index=True
+    ) 
+    
     # =====================================================
     # COMPARE
     # =====================================================
