@@ -555,7 +555,7 @@ def run_score_auditor():
     # =====================================================
     # COMPARE
     # =====================================================
-
+    calc_df = pd.DataFrame(calc_rows)
     comparison_df = ata_df.merge(
         calc_df[
             [
