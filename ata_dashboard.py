@@ -469,6 +469,7 @@ def run_score_auditor():
         ].copy()
 
         if not ab_df.empty:
+
             ab_df["WeekendID"] = assign_weekend_ids(
                 ab_df["Date"]
             )
@@ -485,43 +486,43 @@ def run_score_auditor():
 
                 st.dataframe(
                     ab_df[
-                    [
-                        "Date",
-                        "Tournament",
-                        "Type",
-                        "TypeNorm",
-                        "Forms",
-                        "WeekendID"
-                    ]
-                ],
-                hide_index=True,
-                use_container_width=True
-            )
+                        [
+                            "Date",
+                            "Tournament",
+                            "Type",
+                            "TypeNorm",
+                            "Forms",
+                            "WeekendID"
+                        ]
+                    ],
+                    hide_index=True,
+                    use_container_width=True
+                )
 
-            st.write("Weekend grouping:")
+                st.write("Weekend grouping:")
 
-            weekend_scores = (
+                weekend_scores = (
+                    ab_df.groupby("WeekendID")[event]
+                    .max()
+                )
+
+                st.write(weekend_scores)
+
+                st.write(
+                    "Final A/B Total:",
+                    weekend_scores.nlargest(5).sum()
+                )
+
+            ab_total = min(
                 ab_df.groupby("WeekendID")[event]
                 .max()
+                .nlargest(5)
+                .sum(),
+                40
             )
 
-            st.write(weekend_scores)
-
-            st.write(
-                "Final A/B Total:",
-                weekend_scores.nlargest(5).sum()
-            )
-
-        ab_total = min(
-            ab_df.groupby("WeekendID")[event]
-            .max()
-            .nlargest(5)
-            .sum(),
-            40
-        )
         else:
-            ab_total = 0
-			
+            ab_total = 0			
         # C (best 3 scores, max 9)
         c_total = min(
             work.loc[
