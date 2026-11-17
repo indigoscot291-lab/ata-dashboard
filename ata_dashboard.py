@@ -338,28 +338,28 @@ def run_score_auditor():
         .astype(str)
         .str.replace("Class ", "", regex=False)
     )
-    st.subheader("DEBUG - Spreadsheet Rows")
+    #st.subheader("DEBUG - Spreadsheet Rows")
 
-    debug_person = st.selectbox(
-        "Show spreadsheet rows for competitor",
-        sorted(
-            spreadsheet_df["Name"]
-            .dropna()
-            .unique()
-        )
-    )
+    #debug_person = st.selectbox(
+    #    "Show spreadsheet rows for competitor",
+    #    sorted(
+    #        spreadsheet_df["Name"]
+    #        .dropna()
+     #       .unique()
+     #   )
+    #)
 
-    debug_df = spreadsheet_df[
-        spreadsheet_df["Name"] == debug_person
-    ].copy()
+    #debug_df = spreadsheet_df[
+    #    spreadsheet_df["Name"] == debug_person
+    #].copy()
 
-    debug_df = debug_df.sort_values("Date")
+    #debug_df = debug_df.sort_values("Date")
 
-    st.dataframe(
-        debug_df,
-        use_container_width=True,
-   	    hide_index=True
-    )
+    #st.dataframe(
+    #    debug_df,
+    #    use_container_width=True,
+   	#    hide_index=True
+    #)
 
     # =====================================================
     # WEEKEND GROUPING
@@ -509,25 +509,6 @@ def run_score_auditor():
 
     calc_rows = []
 
-    #for competitor, cdf in spreadsheet_df.groupby("Name"):
-
-        #if pd.isna(competitor):
-            #continue
-
-        #for event in EVENTS:
-
-            #calc_rows.append({
-                #"Name": clean_name(competitor),
-                #"DisplayName": competitor,
-                #"Event": event,
-                #"Spreadsheet Points":
-                    #calculate_event_total(
-                        #cdf,
-                        #event
-                    #)
-            #})
-
-    calc_df = pd.DataFrame(calc_rows)
     for competitor, cdf in spreadsheet_df.groupby("Name"):
 
         if pd.isna(competitor):
@@ -540,18 +521,15 @@ def run_score_auditor():
                 event
             )
 
-        if competitor == "Mary Spurlock":
+            calc_rows.append({
+                "Name": clean_name(competitor),
+                "DisplayName": competitor,
+                "Event": event,
+                "Spreadsheet Points": total
+            })
 
-            st.write(
-                f"{event} = {total}"
-            )
+    calc_df = pd.DataFrame(calc_rows)
 
-        calc_rows.append({
-            "Name": clean_name(competitor),
-            "DisplayName": competitor,
-            "Event": event,
-            "Spreadsheet Points": total
-        }) 
     # =====================================================
     # COMPARE
     # =====================================================
