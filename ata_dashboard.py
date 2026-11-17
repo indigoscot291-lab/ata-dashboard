@@ -496,7 +496,7 @@ def run_score_auditor():
             .sum(),
             9
         )
-            return (
+        return (
             aaa_total
             + aa_total
             + ap_total
