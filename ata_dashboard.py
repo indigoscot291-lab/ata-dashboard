@@ -527,7 +527,7 @@ def run_score_auditor():
                     #)
             #})
 
-    #calc_df = pd.DataFrame(calc_rows)
+    calc_df = pd.DataFrame(calc_rows)
     for competitor, cdf in spreadsheet_df.groupby("Name"):
 
         if pd.isna(competitor):
