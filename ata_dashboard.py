@@ -484,7 +484,7 @@ def run_score_auditor():
                         "Forms"
                     ]
                 ],
-                hide_index=true
+                hide_index=True
             )	
         if not ab_df.empty:
 
