@@ -475,17 +475,17 @@ def run_score_auditor():
 	    ):
             st.subheader("Lauren Brown AB")
 
-		    st.dataframe(
-			    ab_df[
-				    [
-					    "Tournament",
-					    "Type".
-					    "TypeNorm",
-					    "Forms"
-				    ]
-			    ],
-			    hide_index=true
-		    )	
+            st.dataframe(
+                ab_df[
+                    [
+                        "Tournament",
+                        "Type".
+                        "TypeNorm",
+                        "Forms"
+                    ]
+                ],
+                hide_index=true
+            )	
         if not ab_df.empty:
 
             ab_df["WeekendID"] = assign_weekend_ids(
