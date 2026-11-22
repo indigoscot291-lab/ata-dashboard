@@ -479,7 +479,7 @@ def run_score_auditor():
                 ab_df[
                     [
                         "Tournament",
-                        "Type".
+                        "Type",
                         "TypeNorm",
                         "Forms"
                     ]
