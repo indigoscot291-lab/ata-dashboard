@@ -473,7 +473,7 @@ def run_score_auditor():
 		    and cdf["Name"].iloc[0] == "Lauren Brown"
 		    and event == "Forms"
 	    ):
-		    st.subheader("Lauren Brown AB")
+            st.subheader("Lauren Brown AB")
 
 		    st.dataframe(
 			    ab_df[
