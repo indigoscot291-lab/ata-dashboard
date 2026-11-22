@@ -478,21 +478,21 @@ def run_score_auditor():
             if (
                 not cdf.empty
                 and cdf["Name"].iloc[0] == "Lauren Brown"
-                and event == "Forms"
+                #and event == "Forms"
             ):
                 st.subheader("LAUREN BROWN - FORMS DEBUG")
 
-                st.write("A/B tournaments considered:")
+                #st.write("A/B tournaments considered:")
 
                 st.dataframe(
-                    ab_df[
+                    work[
                         [
                             "Date",
                             "Tournament",
                             "Type",
                             "TypeNorm",
                             "Forms",
-                            "WeekendID"
+                            #"WeekendID"
                         ]
                     ],
                     hide_index=True,
